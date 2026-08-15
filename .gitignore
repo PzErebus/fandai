@@ -1,0 +1,7 @@
+node_modules/
+.wrangler/
+.workbuddy/
+*.backup
+wrangler.toml
+worker.js.backup
+.DS_Store

@@ -1,0 +1,22 @@
+name = "fandai-worker"
+main = "worker.js"
+compatibility_date = "2026-05-23"
+
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_id = "YOUR_D1_DATABASE_ID"
+
+[triggers]
+crons = ["0 */6 * * *"]
+
+[vars]
+ADMIN_TOKEN = "change_me_admin_token"
+CF_ACCOUNT_ID = "YOUR_CF_ACCOUNT_ID"
+CF_API_TOKEN = "YOUR_CF_API_TOKEN"
+CF_DOMAIN = "your-domain.example.com"
+CF_WORKER_NAME = "fandai-worker"
+CF_ZONE_ID = "YOUR_CF_ZONE_ID"
+TG_BOT_TOKEN = "YOUR_TG_BOT_TOKEN"
+TG_CHAT_ID = "YOUR_TG_CHAT_ID"
