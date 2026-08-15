@@ -1,4 +1,4 @@
-// VERSION: 1.2.1
+// VERSION: 1.2.2
 
 // ==========================================
 // 安全工具函数 (Security Utilities)
@@ -76,6 +76,61 @@ async function speedtestOptimizedFromEdge() {
     results.sort((a, b) => a.ms - b.ms);
     return results;
 }
+
+// ==========================================
+// 🔀 运行时故障转移（Failover）共享缓存与配置
+// ==========================================
+// 模块级缓存（同 isolate 内跨请求共享，冷启动重置；配合 D1 持久化跨 isolate 可见）
+const FD = globalThis.__fd || (globalThis.__fd = { health: new Map(), cfg: new Map(), cfgUntil: 0 });
+const FO_DOWN_TTL = 60 * 1000; // 节点判定为「不可用」后的跳过时长（秒级切换）
+
+// 读取系统配置（30s 内存缓存，避免每请求打 D1；未命中的 key 不缓存，保证写入后立即可读）
+async function getCfg(env, key, defVal) {
+    const now = Date.now();
+    if (FD.cfgUntil > now - 30000 && FD.cfg.has(key)) return FD.cfg.get(key);
+    let val = defVal; let found = false;
+    try {
+        const row = await env.DB.prepare('SELECT value FROM system_config WHERE key = ?').bind(key).first();
+        if (row && row.value != null) { val = row.value; found = true; }
+    } catch (e) {}
+    if (found) { FD.cfg.set(key, val); FD.cfgUntil = now; }
+    return val;
+}
+
+async function setCfg(env, key, value) {
+    try {
+        await env.DB.prepare('INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)').bind(key, String(value)).run();
+        FD.cfg.set(key, String(value)); FD.cfgUntil = Date.now();
+        return true;
+    } catch (e) { return false; }
+}
+
+// 标记节点健康状态（内存 + D1）
+function markNodeDown(targetUrlStr) {
+    FD.health.set(targetUrlStr, Date.now() + FO_DOWN_TTL);
+    try { globalThis.__fdDB && globalThis.__fdDB.prepare('INSERT OR REPLACE INTO node_health (target, status, ts) VALUES (?, ?, ?)').bind(targetUrlStr, 'down', Date.now()).run(); } catch (e) {}
+}
+function markNodeUp(targetUrlStr) {
+    FD.health.delete(targetUrlStr);
+}
+function isNodeDown(targetUrlStr) {
+    const until = FD.health.get(targetUrlStr);
+    if (!until) return false;
+    if (until < Date.now()) { FD.health.delete(targetUrlStr); return false; }
+    return true;
+}
+// 记录一次故障转移事件并累加当日计数
+async function logFailover(env, prefix, targetUrlStr, reason) {
+    try {
+        const today = new Date(Date.now() + 8 * 3600000).toISOString().split('T')[0];
+        await env.DB.prepare('INSERT INTO failover_log (prefix, target, ts, reason) VALUES (?, ?, ?, ?)')
+            .bind(prefix || 'direct', targetUrlStr, Date.now(), reason || '').run();
+        const row = await env.DB.prepare('SELECT value FROM system_config WHERE key = ?').bind('failover_' + today).first();
+        const n = (row && row.value) ? parseInt(row.value, 10) || 0 : 0;
+        await env.DB.prepare('INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)').bind('failover_' + today, String(n + 1)).run();
+    } catch (e) {}
+}
+
 
 // 路径验证：防止路径遍历攻击
 function isValidPath(path) {
@@ -286,10 +341,6 @@ const CSS_COMMON = `
     .node-stat-label { font-size: 11px; color: var(--text-sec); }
     .node-stat-value { font-size: 15px; font-weight: 700; }
 
-    .node-top-info { display: flex; flex-direction: column; gap: 6px; }
-    .node-top-info .info-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-    .node-top-info .info-label { color: var(--text-sec); font-size: 12px; }
-
     .node-details { margin-top: 2px; }
     .node-details summary { list-style: none; cursor: pointer; font-size: 13px; color: var(--primary); font-weight: 600; padding: 6px 0; user-select: none; display: flex; align-items: center; gap: 6px; }
     .node-details summary::-webkit-details-marker { display: none; }
@@ -425,7 +476,6 @@ const CSS_COMMON = `
         .card-footer { flex-direction: column; gap: 6px; }
         .card-footer .btn-edit, .card-footer .btn-del { width: 100%; text-align: center; justify-content: center; }
         .node-details summary { font-size: 12px; }
-        .node-top-info .info-row { flex-direction: row; align-items: center; gap: 8px; }
 
         .table-wrapper { border: none; background: transparent; overflow: visible; }
         table, thead, tbody, th, td, tr { display: block; width: 100%; }
@@ -535,6 +585,10 @@ const LANDING_UI = `
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>智能反代系统 · 访问地址</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#6366f1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{
   --bg:#0f1115; --card:#171a21; --border:#262b36; --text:#e8eaed; --text-sec:#9aa3b2;
@@ -567,8 +621,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC
 .foot a{color:var(--primary);text-decoration:none}
 .tag{display:inline-block;font-size:11px;color:var(--text-sec);background:#1f2430;border:1px solid var(--border);padding:2px 8px;border-radius:999px;margin-left:8px}
 .services{margin-top:28px}
-.services h2{font-size:15px;font-weight:600;color:var(--text-sec);margin-bottom:14px;display:flex;align-items:center;gap:8px}
-.services h2::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--primary)}
+.services > summary{font-size:15px;font-weight:600;color:var(--text-sec);display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;user-select:none;padding:6px 2px;margin-bottom:0}
+.services > summary::-webkit-details-marker{display:none}
+.services > summary::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--primary)}
+.services > summary::after{content:"▸";margin-left:auto;font-size:12px;transition:transform .2s;color:var(--text-sec)}
+.services[open] > summary{margin-bottom:14px}
+.services[open] > summary::after{transform:rotate(90deg)}
 .svc-list{display:flex;flex-direction:column;gap:10px}
 .svc{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:14px;transition:.15s}
 .svc:hover{border-color:var(--primary)}
@@ -648,6 +706,12 @@ fetch('/api/health').then(function(r){return r.json();}).then(function(data){
     s.classList.remove('loading'); s.classList.add('offline'); s.title = '检测失败';
   });
 });
+// 📱 PWA：注册 Service Worker（离线也能看地址）
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('/sw.js').catch(function(){});
+  });
+}
 </script>
 </body>
 </html>
@@ -663,6 +727,9 @@ const HTML_UI = `
     <style>${CSS_COMMON}</style>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsvectormap@1.6.0/dist/css/jsvectormap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.6.0/dist/jsvectormap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.6.0/dist/maps/world.js"></script>
 </head>
 <body>
     <div id="toast"></div>
@@ -670,7 +737,7 @@ const HTML_UI = `
     <nav class="top-nav">
         <div class="nav-left">
             <span class="nav-brand">智能反代系统</span>
-            <span class="nav-version">v1.2.1</span>
+            <span class="nav-version">v1.2.2</span>
             <div class="nav-trace">
                 <div class="nav-trace-item">
                     <span class="nav-trace-icon">📍</span>
@@ -705,6 +772,7 @@ const HTML_UI = `
                     <span>今天: <strong id="trafficToday">加载中...</strong></span>
                     <span>1周内: <strong id="traffic7d">加载中...</strong></span>
                     <span>1月内: <strong id="traffic30d">加载中...</strong></span>
+                    <span>🔀 今日故障转移: <strong id="failoverToday" style="color:var(--warning);">加载中...</strong></span>
                 </div>
             </div>
             <div class="modal-body">
@@ -714,6 +782,16 @@ const HTML_UI = `
                     </div>
                     <div class="chart-col chart-col-side">
                         <canvas id="locationChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-row" style="margin-top:16px;">
+                    <div class="chart-col chart-col-main">
+                        <div style="font-size:13px;color:var(--text-sec);margin-bottom:8px;font-weight:500;">🌍 访问者地理分布（近 7 天）</div>
+                        <div id="geoMap" style="height:280px;width:100%;border-radius:12px;border:1px solid var(--border);"></div>
+                    </div>
+                    <div class="chart-col chart-col-side">
+                        <div style="font-size:13px;color:var(--text-sec);margin-bottom:8px;font-weight:500;">📉 节点延迟趋势（近 7 天）</div>
+                        <canvas id="pingHistoryChart"></canvas>
                     </div>
                 </div>
                 <div class="modal-section-title">🕵️ 最新独立播放记录 <span class="modal-section-sub">(仅拦截 PlaybackInfo 真实播放)</span></div>
@@ -732,7 +810,7 @@ const HTML_UI = `
             <div class="section-header" style="margin-bottom:0;">
                 <div>
                     <div class="section-title" style="color: var(--success);">✨ 发现新版本！</div>
-                    <p style="font-size: 13px; color: var(--text-sec); margin-top: 4px;" id="updateMsg">当前版本: v1.2.1 | 最新版本: v?.?.?</p>
+                    <p style="font-size: 13px; color: var(--text-sec); margin-top: 4px;" id="updateMsg">当前版本: v1.2.2 | 最新版本: v?.?.?</p>
                 </div>
                 <button class="btn-submit" onclick="doOnlineUpdate()" id="onlineUpdateBtn" style="background: linear-gradient(135deg, var(--success), #059669);">🚀 一键拉取并升级</button>
             </div>
@@ -1105,6 +1183,16 @@ const HTML_UI = `
                 <div style="font-size:12px;color:var(--text-sec);margin-bottom:12px;">边缘节点对各优选域名发 HEAD /cdn-cgi/trace 测速，按客户端网段缓存 1 小时。复制最快域名可作反代目标前缀，从最快 Cloudflare 边缘回源。</div>
                 <div id="domainSpeedResult" style="display:flex;flex-direction:column;gap:8px;">点击「开始测速」获取各优选域名延迟…</div>
             </div>
+            <div class="card">
+                <div class="section-header">
+                    <div class="section-title">🔀 运行时故障转移</div>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+                        <input type="checkbox" id="failoverToggle" onchange="toggleFailover()" style="width:18px;height:18px;accent-color:var(--primary);">
+                        <span id="failoverToggleStatus" style="color:var(--text-sec);">加载中...</span>
+                    </label>
+                </div>
+                <div style="font-size:12px;color:var(--text-sec);">某节点请求失败（5xx / 连接错误 / 超时）时，本次请求自动重试同路由的备用节点；近期判定不可用的节点在 60 秒内被直接跳过，实现秒级切换。故障转移次数可在「数据大屏」查看。</div>
+            </div>
             </div>
         </details>
 </div>
@@ -1117,7 +1205,7 @@ const HTML_UI = `
     </div>
 
     <script>
-        const CURRENT_VERSION = '1.2.1';
+        const CURRENT_VERSION = '1.2.2';
         const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PzErebus/fandai/main/worker.js';
         const CF_DOMAIN = 'fandai.erebus.de5.net';
         
@@ -1188,6 +1276,47 @@ const HTML_UI = `
             } catch(e) {
                 console.warn('加载Bot配置失败:', e);
             }
+        }
+
+        // ==========================================
+        // 🔀 运行时故障转移开关
+        // ==========================================
+        async function loadFailoverConfig() {
+            try {
+                const res = await fetch('/api/get-cfg?key=failover_enabled');
+                const data = await res.json();
+                const toggle = document.getElementById('failoverToggle');
+                const status = document.getElementById('failoverToggleStatus');
+                if (toggle && status && data.success) {
+                    const on = data.value !== 'off';
+                    toggle.checked = on;
+                    status.textContent = on ? '已开启' : '已关闭';
+                    status.style.color = on ? 'var(--success)' : 'var(--danger)';
+                }
+            } catch(e) { console.warn('加载故障转移配置失败:', e); }
+        }
+
+        async function toggleFailover() {
+            const toggle = document.getElementById('failoverToggle');
+            const status = document.getElementById('failoverToggleStatus');
+            if (!toggle || !status) return;
+            const enabled = toggle.checked;
+            try {
+                const res = await fetch('/api/set-cfg', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: 'failover_enabled', value: enabled ? 'on' : 'off' })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    status.textContent = enabled ? '已开启' : '已关闭';
+                    status.style.color = enabled ? 'var(--success)' : 'var(--danger)';
+                    showToast(enabled ? '🔀 运行时故障转移已开启' : '⏸ 运行时故障转移已关闭');
+                } else {
+                    toggle.checked = !enabled;
+                    showToast('❌ ' + (data.error || '设置失败'));
+                }
+            } catch(e) { toggle.checked = !enabled; showToast('❌ 网络错误'); }
         }
 
         async function toggleBotNotification() {
@@ -1378,6 +1507,52 @@ const HTML_UI = `
                     },
                     options: { responsive: true, plugins: { title: { display: true, text: '独立访客来源地占比', font: {size: 16} } } }
                 });
+
+                // 🔀 今日故障转移统计
+                const foEl = document.getElementById('failoverToday');
+                if (foEl) foEl.innerText = (data.failoverToday || 0) + ' 次';
+
+                // 🌍 访问者地理分布世界地图
+                const mapEl = document.getElementById('geoMap');
+                if (mapEl && typeof jsVectorMap !== 'undefined') {
+                    const regionValues = {};
+                    (data.locations || []).forEach(l => { if (l.country) regionValues[l.country] = Number(l.count) || 0; });
+                    try {
+                        if (window.__geoMap) { window.__geoMap.destroy(); window.__geoMap = null; }
+                        window.__geoMap = new jsVectorMap({
+                            selector: '#geoMap',
+                            map: 'world',
+                            backgroundColor: 'transparent',
+                            zoomButtons: true,
+                            regionStyle: { initial: { fill: '#2a3140' }, hover: { fill: '#6366f1', fillOpacity: 0.6 } },
+                            series: { regions: [{ values: regionValues, scale: ['#1e3a8a', '#6366f1', '#a855f7'], normalizeFunction: 'polynomial' }] },
+                            onRegionTooltipShow: (event, tooltip, code) => { tooltip.text(code + '：' + (regionValues[code] || 0) + ' 次播放', true); }
+                        });
+                    } catch (e) { mapEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-sec);font-size:13px;">地图加载失败</div>'; }
+                }
+
+                // 📉 节点延迟趋势（近 7 天）
+                try {
+                    const phRes = await fetch('/api/ping-history');
+                    const phData = await phRes.json();
+                    const phCanvas = document.getElementById('pingHistoryChart');
+                    if (phData.success && phData.points && phData.points.length && phCanvas) {
+                        const byPrefix = {};
+                        phData.points.forEach(p => { if (!byPrefix[p.prefix]) byPrefix[p.prefix] = {}; byPrefix[p.prefix][p.day] = p.avg_ms; });
+                        const days = [...new Set(phData.points.map(p => p.day))].sort();
+                        const palettes = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899'];
+                        const datasets = Object.keys(byPrefix).map((pfx, i) => ({ label: '/' + pfx, data: days.map(d => byPrefix[pfx][d] ?? null), borderColor: palettes[i % palettes.length], backgroundColor: 'transparent', tension: 0.3, spanGaps: true }));
+                        const phCtx = phCanvas.getContext('2d');
+                        if (window.__pingHistoryChart) window.__pingHistoryChart.destroy();
+                        window.__pingHistoryChart = new Chart(phCtx, {
+                            type: 'line',
+                            data: { labels: days.map(d => d.substring(5)), datasets },
+                            options: { responsive: true, plugins: { title: { display: true, text: '各节点平均延迟 (ms)', font: {size: 14} } }, scales: { y: { beginAtZero: true } } }
+                        });
+                    } else if (phCanvas) {
+                        phCanvas.parentNode.insertAdjacentHTML('beforeend', '<div style="font-size:12px;color:var(--text-sec);text-align:center;padding:20px;">暂无测速历史（在节点卡片点「测速」即可记录）</div>');
+                    }
+                } catch (e) {}
 
                 const tbody = document.getElementById('logTableBody');
                 tbody.innerHTML = '';
@@ -1594,11 +1769,11 @@ const HTML_UI = `
 
         function copyTxt(txt) { navigator.clipboard.writeText(txt).then(() => showToast('🚀 复制成功！')); }
 
-        async function pingTarget(idx, targetUrl) {
+        async function pingTarget(idx, targetUrl, prefix) {
             const pingEl = document.getElementById('ping-' + idx);
             pingEl.textContent = '测速中...'; pingEl.style.color = 'var(--text-sec)';
             try {
-                const res = await fetch('/api/ping-node?url=' + encodeURIComponent(targetUrl));
+                const res = await fetch('/api/ping-node?url=' + encodeURIComponent(targetUrl) + (prefix ? '&prefix=' + encodeURIComponent(prefix) : ''));
                 const data = await res.json();
                 if(data.ms >= 0) {
                     pingEl.textContent = data.ms + ' ms';
@@ -1610,7 +1785,7 @@ const HTML_UI = `
         function pingAllNodes() {
             if (proxyNodesForPing.length === 0) return showToast('⚠️ 没有可供测速的反代节点');
             showToast('⚡ 正在对所有节点发起测速...');
-            proxyNodesForPing.forEach((node, offset) => { setTimeout(() => pingTarget(node.idx, node.url), offset * 200); });
+            proxyNodesForPing.forEach((node, offset) => { setTimeout(() => pingTarget(node.idx, node.url, node.prefix), offset * 200); });
         }
 
         async function runDomainSpeedTest() {
@@ -1708,7 +1883,7 @@ const HTML_UI = `
                     const todayBw = r.todayBandwidth || '0 B';
                     const totalReqs = r.totalReqs || r.todayReqs || 0;
 
-                    proxyNodesForPing.push({ idx: idx, url: mainTarget });
+                    proxyNodesForPing.push({ idx: idx, url: mainTarget, prefix: r.prefix });
 
                     container.innerHTML += \`
                     <div class="emby-card route-item" data-prefix="\${r.prefix}" data-search="\${remarkName} \${r.prefix}">
@@ -1722,21 +1897,7 @@ const HTML_UI = `
                                     <div style="font-size: 12px; color: var(--text-sec); margin-top:1px;">/\${r.prefix}</div>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="node-top-info">
-                            <div class="info-row">
-                                <span class="info-label">节点延迟:</span>
-                                <span id="ping-\${idx}" class="ping-badge" onclick="pingTarget(\${idx}, '\${mainTarget}')" title="点击重新测速">测速中...</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">海报缓存:</span>
-                                <span style="color:\${r.cache_img !== 'off' ? 'var(--success)' : 'var(--warning)'}; font-weight:600; font-size: 12px;">\${r.cache_img !== 'off' ? '✅ 已开启' : '❌ 已关闭'}</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">最后活跃:</span>
-                                <span style="color:var(--text-sec); font-size: 12px;">\${lastPlay}</span>
-                            </div>
+                            <span class="badge" style="background: rgba(99,102,241,0.08); color: var(--primary);">\${modeNames[r.mode] || '未知'}</span>
                         </div>
 
                         <div class="node-stats">
@@ -1748,16 +1909,24 @@ const HTML_UI = `
                                 <span class="node-stat-label">📺 播放 (今日/累计)</span>
                                 <span class="node-stat-value" style="color:var(--warning);">\${r.todayReqs} / \${totalReqs}</span>
                             </div>
-                            <div class="node-stat-item node-stat-mode">
-                                <span class="node-stat-label">模式</span>
-                                <span class="node-stat-value" style="color:var(--primary); font-size: 13px; padding: 3px 10px; border-radius: 999px; background: rgba(99,102,241,0.08); display: inline-block;">\${modeNames[r.mode] || '未知'}</span>
-                            </div>
                         </div>
 
                         <details class="node-details">
                             <summary>查看详情</summary>
                             <div class="node-details-body">
                         <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div class="info-row">
+                                <span class="info-label">节点延迟:</span>
+                                <span id="ping-\${idx}" class="ping-badge" onclick="pingTarget(\${idx}, '\${mainTarget}', '\${r.prefix}')" title="点击重新测速">测速中...</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">海报缓存:</span>
+                                <span style="color:\${r.cache_img !== 'off' ? 'var(--success)' : 'var(--warning)'}; font-weight:600; font-size: 12px;">\${r.cache_img !== 'off' ? '✅ 已开启' : '❌ 已关闭'}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">最后活跃:</span>
+                                <span style="color:var(--text-sec); font-size: 12px;">\${lastPlay}</span>
+                            </div>
                             <div class="info-row">
                                 <span class="info-label">直达链接:</span>
                                 <div class="action-group" style="flex:1; justify-content: flex-end; margin-left: 8px; align-items: flex-start;">
@@ -2489,6 +2658,7 @@ const HTML_UI = `
         window.addEventListener('DOMContentLoaded', () => {
             setTimeout(fetchCfTrace, 500);
             loadBotConfig();
+            loadFailoverConfig();
         });
     // 🚀 新增：全云厂商节点数据库 (包含 Cloudflare 支持的所有主要区域)
         var cfRegions = {
@@ -3728,6 +3898,30 @@ export default {
     async fetch(request, env, ctx) {
         try {
         const url = new URL(request.url);
+        if (env.DB) globalThis.__fdDB = env.DB; // 供模块级故障转移缓存写回 D1
+
+        // 新增表幂等确保（每 isolate 首次请求执行一次，避免各新接口反复 DDL）
+        if (env.DB && !globalThis.__fdTables) {
+            globalThis.__fdTables = true;
+            try {
+                await env.DB.exec(`CREATE TABLE IF NOT EXISTS node_health (target TEXT PRIMARY KEY, status TEXT DEFAULT 'up', ts INTEGER DEFAULT 0)`);
+                await env.DB.exec(`CREATE TABLE IF NOT EXISTS failover_log (id INTEGER PRIMARY KEY AUTOINCREMENT, prefix TEXT, target TEXT, ts INTEGER, reason TEXT)`);
+                await env.DB.exec(`CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT)`);
+                await env.DB.exec(`CREATE TABLE IF NOT EXISTS node_ping_history (id INTEGER PRIMARY KEY AUTOINCREMENT, prefix TEXT, target TEXT, ts INTEGER, ms INTEGER)`);
+                try { await env.DB.exec(`ALTER TABLE visitor_logs ADD COLUMN lat REAL DEFAULT 0`); } catch(e) {}
+                try { await env.DB.exec(`ALTER TABLE visitor_logs ADD COLUMN lon REAL DEFAULT 0`); } catch(e) {}
+                try { await env.DB.exec(`ALTER TABLE visitor_logs ADD COLUMN city TEXT DEFAULT ''`); } catch(e) {}
+                // 治愈历史遗留异结构 system_config：探测失败则 DROP 重建（新表，仅存 failover 计数/开关）
+                try {
+                    await env.DB.prepare('SELECT key, value FROM system_config LIMIT 1').first();
+                } catch (e) {
+                    try {
+                        await env.DB.exec('DROP TABLE IF EXISTS system_config');
+                        await env.DB.exec('CREATE TABLE system_config (key TEXT PRIMARY KEY, value TEXT)');
+                    } catch (e2) {}
+                }
+            } catch(e) { globalThis.__fdTables = false; }
+        }
         
         // ==========================================
         // 🔧 通用数据库初始化函数：确保所有表都存在
@@ -3771,7 +3965,25 @@ export default {
                 
                 // 优选域名测速缓存（按客户端网段）
                 await env.DB.exec(`CREATE TABLE IF NOT EXISTS domain_speed_cache (cache_key TEXT PRIMARY KEY, results_json TEXT, ts INTEGER DEFAULT 0)`);
-                
+
+                // 运行时故障转移 / 测速历史 / 系统配置
+                await env.DB.exec(`CREATE TABLE IF NOT EXISTS node_health (target TEXT PRIMARY KEY, status TEXT DEFAULT 'up', ts INTEGER DEFAULT 0)`);
+                await env.DB.exec(`CREATE TABLE IF NOT EXISTS failover_log (id INTEGER PRIMARY KEY AUTOINCREMENT, prefix TEXT, target TEXT, ts INTEGER, reason TEXT)`);
+                await env.DB.exec(`CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT)`);
+                await env.DB.exec(`CREATE TABLE IF NOT EXISTS node_ping_history (id INTEGER PRIMARY KEY AUTOINCREMENT, prefix TEXT, target TEXT, ts INTEGER, ms INTEGER)`);
+                try { await env.DB.exec(`ALTER TABLE visitor_logs ADD COLUMN lat REAL DEFAULT 0`); } catch(e) {}
+                try { await env.DB.exec(`ALTER TABLE visitor_logs ADD COLUMN lon REAL DEFAULT 0`); } catch(e) {}
+                try { await env.DB.exec(`ALTER TABLE visitor_logs ADD COLUMN city TEXT DEFAULT ''`); } catch(e) {}
+                // 治愈历史遗留异结构 system_config：探测失败则 DROP 重建
+                try {
+                    await env.DB.prepare('SELECT key, value FROM system_config LIMIT 1').first();
+                } catch (e) {
+                    try {
+                        await env.DB.exec('DROP TABLE IF EXISTS system_config');
+                        await env.DB.exec('CREATE TABLE system_config (key TEXT PRIMARY KEY, value TEXT)');
+                    } catch (e2) {}
+                }
+
                 return true;
             } catch(e) {
                 console.error("Database init error:", e.message);
@@ -3996,6 +4208,42 @@ export default {
             }
         }
 
+        // 📱 PWA manifest（公开）
+        if (url.pathname === '/manifest.webmanifest') {
+            const iconSvg = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#6366f1"/><text x="50" y="64" font-size="46" text-anchor="middle">🚀</text></svg>`);
+            const manifest = {
+                name: '智能反代系统',
+                short_name: '智能反代',
+                description: '智能反代系统 · 访问地址导航',
+                start_url: '/',
+                scope: '/',
+                display: 'standalone',
+                background_color: '#0f1115',
+                theme_color: '#6366f1',
+                icons: [{ src: 'data:image/svg+xml,' + iconSvg, sizes: 'any', type: 'image/svg+xml', purpose: 'any' }]
+            };
+            return new Response(JSON.stringify(manifest), { headers: { 'Content-Type': 'application/manifest+json', 'Cache-Control': 'public, max-age=3600' } });
+        }
+
+        // 📱 PWA Service Worker（公开）：缓存导航页实现离线查看地址
+        if (url.pathname === '/sw.js') {
+            const swCode = `const CACHE='fandai-landing-v1';
+self.addEventListener('install',e=>{self.skipWaiting();});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
+self.addEventListener('fetch',e=>{
+  if(e.request.method!=='GET') return;
+  const u=new URL(e.request.url);
+  if(u.pathname==='/sw.js'||u.pathname==='/manifest.webmanifest') return;
+  e.respondWith(
+    fetch(e.request).then(res=>{
+      if(res.ok && u.origin===location.origin){ const c=res.clone(); caches.open(CACHE).then(ca=>ca.put(e.request,c)); }
+      return res;
+    }).catch(()=>caches.match(e.request).then(m=>m||caches.match('/')))
+  );
+});`;
+            return new Response(swCode, { headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'public, max-age=3600' } });
+        }
+
         // 地址导航页（公开）：主域 + 三子域的 `/` 均打开此页
         if (url.pathname === '/') {
             let landingHtml = LANDING_UI;
@@ -4012,7 +4260,7 @@ export default {
                                 : '🎬';
                             return `<div class="svc"><div class="svc-icon">${iconHtml}</div><div class="svc-info"><div class="svc-name">${name}</div><div class="svc-prefix">/${prefix}</div></div><div class="svc-status loading" data-prefix="/${prefix}" title="检测中..."></div></div>`;
                         }).join('');
-                        landingHtml = landingHtml.replace('<!-- SERVICES -->', `<div class="services"><h2>支持的服务</h2><div class="svc-list">${list}</div></div>`);
+                        landingHtml = landingHtml.replace('<!-- SERVICES -->', `<details class="services"><summary>支持的服务</summary><div class="svc-list">${list}</div></details>`);
                     }
                 } catch (e) { console.error('Landing routes error:', e); }
             }
@@ -4040,17 +4288,44 @@ export default {
                 const trend = await env.DB.prepare(`SELECT date(timestamp, '+8 hours') as date, COUNT(*) as count FROM visitor_logs WHERE timestamp >= datetime('now', '-7 days') GROUP BY date(timestamp, '+8 hours') ORDER BY date ASC`).all();
                 const locations = await env.DB.prepare(`SELECT country, COUNT(*) as count FROM visitor_logs WHERE timestamp >= datetime('now', '-7 days') GROUP BY country ORDER BY count DESC`).all();
                 const recents = await env.DB.prepare(`SELECT prefix, datetime(timestamp, '+8 hours') as timestamp, ip, country, ua FROM visitor_logs ORDER BY timestamp DESC LIMIT 20`).all();
-                
-                return Response.json({ 
-                    success: true, 
-                    trend: trend.results, 
-                    locations: locations.results, 
-                    recents: recents.results, 
-                    trafficToday, traffic7d, traffic30d 
+                const todayStr = new Date(Date.now() + 8 * 3600000).toISOString().split('T')[0];
+                const foRow = await env.DB.prepare('SELECT value FROM system_config WHERE key = ?').bind('failover_' + todayStr).first();
+                const failoverToday = foRow && foRow.value ? (parseInt(foRow.value, 10) || 0) : 0;
+                const foEnabledRow = await env.DB.prepare('SELECT value FROM system_config WHERE key = ?').bind('failover_enabled').first();
+                const failoverEnabled = foEnabledRow ? foEnabledRow.value !== 'off' : true;
+
+                return Response.json({
+                    success: true,
+                    trend: trend.results,
+                    locations: locations.results,
+                    recents: recents.results,
+                    trafficToday, traffic7d, traffic30d,
+                    failoverToday, failoverEnabled
                 });
             } catch(e) {
                 return Response.json({ success: false, error: e.message });
             }
+        }
+
+        // 系统配置读写（故障转移开关等）
+        if (url.pathname === '/api/get-cfg') {
+            if (!env.DB) return Response.json({ success: false, value: null });
+            try {
+                const key = url.searchParams.get('key');
+                if (!key) return Response.json({ success: false, value: null });
+                const val = await getCfg(env, key, null);
+                return Response.json({ success: true, value: val });
+            } catch (e) { return Response.json({ success: false, value: null }); }
+        }
+
+        if (url.pathname === '/api/set-cfg' && request.method === 'POST') {
+            if (!env.DB) return Response.json({ success: false, error: '未绑定 D1' });
+            try {
+                const body = await request.json();
+                if (!body.key) return Response.json({ success: false, error: '缺少 key' });
+                await setCfg(env, body.key, body.value);
+                return Response.json({ success: true });
+            } catch (e) { return Response.json({ success: false, error: e.message }); }
         }
 
         // ==========================================
@@ -4159,13 +4434,35 @@ export default {
 
         if (url.pathname === '/api/ping-node') {
             const target = url.searchParams.get('url');
+            const prefix = url.searchParams.get('prefix') || '';
             if (!target) return Response.json({ ms: -1 });
             const start = Date.now();
+            let ms = -1;
             try {
                 const controller = new AbortController(); const timeoutId = setTimeout(() => controller.abort(), 2000); 
                 await fetch(target + '/', { method: 'HEAD', signal: controller.signal });
-                clearTimeout(timeoutId); return Response.json({ ms: Date.now() - start });
-            } catch (e) { return Response.json({ ms: -1 }); }
+                clearTimeout(timeoutId); ms = Date.now() - start;
+            } catch (e) { ms = -1; }
+            // 📉 测速历史：写入 node_ping_history 供 7 天延迟趋势图使用
+            if (env.DB && ms >= 0) {
+                try {
+                    await env.DB.prepare('INSERT INTO node_ping_history (prefix, target, ts, ms) VALUES (?, ?, ?, ?)')
+                        .bind(prefix || 'direct', target, Date.now(), ms).run();
+                } catch (e) {}
+            }
+            return Response.json({ ms });
+        }
+
+        if (url.pathname === '/api/ping-history') {
+            if (!env.DB) return Response.json({ success: false, error: '未绑定 D1' });
+            try {
+                const days = 7;
+                const since = Date.now() - days * 86400000;
+                const { results } = await env.DB.prepare(
+                    'SELECT prefix, date(ts/1000, "unixepoch", "+8 hours") as day, CAST(AVG(ms) AS INTEGER) as avg_ms, MIN(ms) as min_ms, MAX(ms) as max_ms, COUNT(*) as n FROM node_ping_history WHERE ts >= ? GROUP BY prefix, date(ts/1000, "unixepoch", "+8 hours") ORDER BY day ASC'
+                ).bind(since).all();
+                return Response.json({ success: true, days, points: results });
+            } catch (e) { return Response.json({ success: false, error: e.message }); }
         }
 
         if (url.pathname === '/api/get-dns') {
@@ -4821,7 +5118,11 @@ ${linkHtml}
                 const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-real-ip") || "Unknown";
                 const clientCountry = request.headers.get("cf-ipcountry") || "Unknown";
                 const clientUa = request.headers.get("User-Agent") || "Unknown";
-                stmts.push(env.DB.prepare(`INSERT INTO visitor_logs (prefix, ip, country, ua) VALUES (?, ?, ?, ?)`).bind(matchedPrefix, clientIp, clientCountry, clientUa));
+                const cfGeo = request.cf || {};
+                const clientLat = parseFloat(cfGeo.latitude) || 0;
+                const clientLon = parseFloat(cfGeo.longitude) || 0;
+                const clientCity = cfGeo.city || '';
+                stmts.push(env.DB.prepare(`INSERT INTO visitor_logs (prefix, ip, country, ua, lat, lon, city) VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(matchedPrefix, clientIp, clientCountry, clientUa, clientLat, clientLon, clientCity));
 
                 ctx.waitUntil(env.DB.batch(stmts));
             } catch(e) {}
@@ -4838,10 +5139,17 @@ ${linkHtml}
         }
 
         let finalResponse = null; let lastError = null;
+        const foEnabled = (env.DB) ? (await getCfg(env, 'failover_enabled', 'on') === 'on') : true;
 
-        // 尝试所有节点
+        // 尝试所有节点（含运行时故障转移）
         for (let i = 0; i < targetUrls.length; i++) {
             const targetUrlStr = targetUrls[i] + remainingPath + url.search; const targetUrl = new URL(targetUrlStr);
+
+            // 🔀 运行时故障转移：已知近期不可用的节点直接跳过（除非是最后一个兜底）
+            if (foEnabled && targetUrls.length > 1 && i < targetUrls.length - 1 && isNodeDown(targetUrlStr)) {
+                lastError = new Error(`节点 ${i+1} 近期不可用，已跳过`); continue;
+            }
+
             const newHeaders = new Headers(request.headers); newHeaders.set("Host", targetUrl.host);
 
             const realIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-real-ip") || (request.headers.get("x-forwarded-for") || "").split(',')[0].trim();
@@ -4879,9 +5187,25 @@ ${linkHtml}
 
             try {
                 const modifiedRequest = new Request(targetUrl, fetchInit); const response = await fetch(modifiedRequest);
-                if (response.status === 502 || response.status === 503 || response.status === 504) { lastError = new Error(`Node ${i+1} returned HTTP ${response.status}`); continue; }
+                // 5xx（含 502/503/504/520-524 等 Cloudflare 错误码）视为节点故障，触发故障转移
+                if (response.status >= 500) {
+                    lastError = new Error(`节点 ${i+1} 返回 HTTP ${response.status}`);
+                    if (foEnabled && env.DB) {
+                        markNodeDown(targetUrlStr);
+                        if (i < targetUrls.length - 1) ctx.waitUntil(logFailover(env, matchedPrefix, targetUrlStr, 'HTTP ' + response.status));
+                    }
+                    continue;
+                }
+                markNodeUp(targetUrlStr);
                 finalResponse = response; break; 
-            } catch (err) { lastError = err; continue; }
+            } catch (err) {
+                lastError = err;
+                if (foEnabled && env.DB) {
+                    markNodeDown(targetUrlStr);
+                    if (i < targetUrls.length - 1) ctx.waitUntil(logFailover(env, matchedPrefix, targetUrlStr, '连接失败:' + (err.name || err.message)));
+                }
+                continue;
+            }
         }
 
         if (!finalResponse) return new Response("Worker Proxy Failover Exhausted. All nodes failed. Last Error: " + (lastError?.message || 'Unknown Error'), { status: 502 });
