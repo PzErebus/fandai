@@ -370,6 +370,11 @@ const CSS_COMMON = `
     .chart-col { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: rgba(120,120,120,0.02); }
     .chart-col-main { flex: 2; min-width: 300px; }
     .chart-col-side { flex: 1; min-width: 280px; display: flex; justify-content: center; align-items: center; }
+    .dashboard-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+    .dash-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: rgba(120,120,120,0.02); display: flex; flex-direction: column; }
+    .dash-card-title { font-size: 13px; color: var(--text-sec); font-weight: 500; margin-bottom: 8px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+    .dash-card-body { flex: 1; min-height: 0; position: relative; }
+    .dash-card-body canvas, .dash-card-body > div { width: 100% !important; height: 100% !important; }
     .modal-section-title { margin-top: 24px; margin-bottom: 14px; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
     .modal-section-sub { font-size: 11px; color: var(--text-sec); font-weight: normal; }
 
@@ -499,6 +504,7 @@ const CSS_COMMON = `
         .chart-row { flex-direction: column; gap: 10px; }
         .chart-col { min-width: 100%; padding: 12px; }
         .chart-col-main, .chart-col-side { min-width: 100%; }
+        .dashboard-charts { grid-template-columns: 1fr; }
 
         .nav-btn span.btn-text { display: none; }
         .nav-rtt span.rtt-label { display: none; }
@@ -776,22 +782,22 @@ const HTML_UI = `
                 </div>
             </div>
             <div class="modal-body">
-                <div class="chart-row">
-                    <div class="chart-col chart-col-main">
-                        <canvas id="trendChart"></canvas>
+                <div class="dashboard-charts">
+                    <div class="dash-card">
+                        <div class="dash-card-title">📈 全站播放趋势（7 天）</div>
+                        <div class="dash-card-body" style="height:200px;"><canvas id="trendChart"></canvas></div>
                     </div>
-                    <div class="chart-col chart-col-side">
-                        <canvas id="locationChart"></canvas>
+                    <div class="dash-card">
+                        <div class="dash-card-title">🧭 访客来源地占比</div>
+                        <div class="dash-card-body" style="height:200px;"><canvas id="locationChart"></canvas></div>
                     </div>
-                </div>
-                <div class="chart-row" style="margin-top:16px;">
-                    <div class="chart-col chart-col-main">
-                        <div style="font-size:13px;color:var(--text-sec);margin-bottom:8px;font-weight:500;white-space:nowrap;">🌍 访问者地理分布</div>
-                        <div id="geoMap" style="height:320px;width:100%;border-radius:12px;border:1px solid var(--border);"></div>
+                    <div class="dash-card">
+                        <div class="dash-card-title">🌍 访问者地理分布</div>
+                        <div class="dash-card-body" style="height:240px;"><div id="geoMap" style="border-radius:8px;"></div></div>
                     </div>
-                    <div class="chart-col chart-col-side" style="display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;min-height:340px;">
-                        <div style="font-size:13px;color:var(--text-sec);margin-bottom:8px;font-weight:500;white-space:nowrap;">📉 节点延迟趋势（近 7 天）</div>
-                        <canvas id="pingHistoryChart" style="flex:1;min-height:280px;width:100%;"></canvas>
+                    <div class="dash-card">
+                        <div class="dash-card-title">📉 节点延迟趋势（7 天）</div>
+                        <div class="dash-card-body" style="height:200px;"><canvas id="pingHistoryChart"></canvas></div>
                     </div>
                 </div>
                 <div class="modal-section-title">🕵️ 最新独立播放记录 <span class="modal-section-sub">(仅拦截 PlaybackInfo 真实播放)</span></div>
@@ -1490,9 +1496,9 @@ const HTML_UI = `
                     type: 'line',
                     data: {
                         labels: labels,
-                        datasets: [{ label: '有效播放 (次)', data: counts, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3 }]
+                        datasets: [{ label: '有效播放 (次)', data: counts, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3, pointRadius: 2 }]
                     },
-                    options: { responsive: true, plugins: { title: { display: true, text: '过去 7 天全站播放并发趋势', font: {size: 16} } } }
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: {size: 10} } }, y: { ticks: { font: {size: 10} }, beginAtZero: true } } }
                 });
 
                 const locLabels = data.locations.map(i => i.country === 'CN' ? '中国大陆' : (i.country || '未知'));
@@ -1505,7 +1511,7 @@ const HTML_UI = `
                         labels: locLabels,
                         datasets: [{ data: locCounts, backgroundColor: ['#10b981', '#6366f1', '#f59e0b', '#a855f7', '#ef4444', '#6b7280'], borderWidth: 0 }]
                     },
-                    options: { responsive: true, plugins: { title: { display: true, text: '独立访客来源地占比', font: {size: 16} } } }
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: {size: 10}, padding: 6 } } } }
                 });
 
                 // 🔀 今日故障转移统计
