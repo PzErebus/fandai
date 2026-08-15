@@ -220,11 +220,6 @@ const CSS_COMMON = `
     body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; -webkit-text-size-adjust: 100%; transition: background-color 0.4s ease, color 0.3s ease; line-height: 1.6; }
     .container { max-width: 1200px; margin: 0 auto; width: 100%; min-height: 100vh; display: flex; flex-direction: column; padding: 0 20px; padding-top: calc(var(--nav-height) + 20px); }
     .content-wrap { flex: 1; }
-    .admin-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 20px; align-items: start; margin-bottom: 20px; }
-    .admin-grid > .card { margin-bottom: 0; }
-    .admin-section-label { font-size: 12px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: 1px; margin: 24px 0 12px; display: flex; align-items: center; gap: 8px; }
-    .admin-section-label::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-    @media (max-width: 980px) { .admin-grid { grid-template-columns: 1fr; gap: 16px; } .admin-grid > .card { margin-bottom: 16px; } }
     input, select, button, textarea { font-family: inherit; outline: none; font-size: 14px; }
 
     .card { background: var(--card); padding: 24px; border-radius: var(--radius-card); box-shadow: var(--shadow-card); margin-bottom: 20px; border: 1px solid var(--border); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease; }
@@ -831,7 +826,6 @@ const HTML_UI = `
         <div class="content-wrap">
             
 
-            <div class="admin-section-label">🎛️ 线路调度</div>
             <div class="card alert-card" style="border-left-color: var(--success);">
                 <div class="section-header">
                     <div class="section-title" style="color: var(--success);">&#x1F916; 智能DNS自动调度</div>
@@ -915,8 +909,6 @@ const HTML_UI = `
                 </div>
             </div>
 
-            <div class="admin-section-label">📡 节点管理</div>
-            <div class="admin-grid"><div class="admin-col-main">
             <div class="card">
                 <div class="section-header">
                     <div class="section-title">已反代的媒体库</div>
@@ -947,7 +939,6 @@ const HTML_UI = `
                     <div style="text-align:center; color:var(--text-sec); grid-column: 1 / -1; padding: 40px;">读取数据中...</div>
                 </div>
             </div>
-            </div><div class="admin-col-side">
 
             <div class="card">
                 <div class="section-header">
@@ -1008,7 +999,6 @@ const HTML_UI = `
                     </div>
                 </form>
             </div>
-            </div></div>
 
         
 <details class="settings-group">
