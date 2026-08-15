@@ -1,4 +1,4 @@
-// VERSION: 1.2.2
+// VERSION: 1.2.3
 
 // ==========================================
 // 安全工具函数 (Security Utilities)
@@ -131,6 +131,133 @@ async function logFailover(env, prefix, targetUrlStr, reason) {
     } catch (e) {}
 }
 
+
+// 发送 TG 通知（受 bot_config 开关控制；无 token 则静默跳过）
+async function tgNotify(env, text) {
+    if (!env.TG_BOT_TOKEN || !env.TG_CHAT_ID) return false;
+    try {
+        const botCfg = await env.DB.prepare('SELECT bot_enabled FROM bot_config WHERE id = 1').first();
+        if (botCfg && !botCfg.bot_enabled) return false;
+    } catch (e) {}
+    try {
+        await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: env.TG_CHAT_ID, text, parse_mode: 'Markdown' })
+        });
+        return true;
+    } catch (e) { return false; }
+}
+
+// 确保 node_health 表结构为 (target, status, ts)；旧版异结构表（prefix/response_time）自动重建
+async function ensureNodeHealth(env) {
+    if (!env.DB) return;
+    try {
+        await env.DB.prepare('SELECT target FROM node_health LIMIT 1').first();
+    } catch (e) {
+        try {
+            await env.DB.exec('DROP TABLE IF EXISTS node_health');
+            await env.DB.exec(`CREATE TABLE node_health (target TEXT PRIMARY KEY, status TEXT DEFAULT 'up', ts INTEGER DEFAULT 0)`);
+        } catch (e2) {}
+    }
+}
+
+// 🔍 节点主动健康检查（定时 + 手动）：遍历 routes，对主源站做真实 HEAD ping，
+// 写入 node_ping_history（7 天趋势图复用）与 node_health（状态缓存），
+// 状态翻转（up↔down）时 TG 告警。
+// 🔁 闭环：若主域当前 DNS 优选 IP 全部不可达且开启自动优选，则触发自动重新优选。
+async function healthCheckAllNodes(env) {
+    if (!env.DB) return { success: false, error: '未绑定 D1' };
+    await ensureNodeHealth(env);
+    let routes = [];
+    try {
+        const { results } = await env.DB.prepare('SELECT prefix, target, remark FROM routes ORDER BY sort_order').all();
+        routes = results || [];
+    } catch (e) { return { success: false, error: e.message }; }
+    if (routes.length === 0) return { success: true, checked: 0, down: 0, results: [] };
+
+    const results = [];
+    let downCount = 0;
+
+    for (const r of routes) {
+        const targets = (r.target || '').split(',').map(s => s.trim()).filter(Boolean);
+        const mainTarget = targets[0];
+        if (!mainTarget) continue;
+        const start = Date.now();
+        let ms = -1;
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+            await fetch(mainTarget + '/', { method: 'HEAD', signal: controller.signal });
+            clearTimeout(timeoutId);
+            ms = Date.now() - start;
+        } catch (e) { ms = -1; }
+
+        const status = ms >= 0 ? 'up' : 'down';
+        if (status === 'down') downCount++;
+
+        if (ms >= 0) {
+            try { await env.DB.prepare('INSERT INTO node_ping_history (prefix, target, ts, ms) VALUES (?, ?, ?, ?)').bind(r.prefix || 'direct', mainTarget, Date.now(), ms).run(); } catch (e) {}
+        }
+
+        // 状态翻转检测（读旧状态）
+        let oldStatus = null;
+        try { const row = await env.DB.prepare('SELECT status FROM node_health WHERE target = ?').bind(mainTarget).first(); if (row) oldStatus = row.status; } catch (e) {}
+        try { await env.DB.prepare('INSERT OR REPLACE INTO node_health (target, status, ts) VALUES (?, ?, ?)').bind(mainTarget, status, Date.now()).run(); } catch (e) {}
+
+        if (oldStatus && oldStatus !== status) {
+            const name = r.remark || r.prefix || mainTarget;
+            const tsStr = new Date(Date.now() + 8 * 3600000).toISOString().replace('T', ' ').slice(0, 19);
+            if (status === 'down') {
+                await tgNotify(env, `⚠️ *节点不可达告警*\n\n📺 *${name}* (\`${mainTarget}\`)\n⏱ 检测时间: ${tsStr}\n❌ 状态: 源站无响应（超时 3s）`);
+            } else {
+                await tgNotify(env, `✅ *节点恢复通知*\n\n📺 *${name}* (\`${mainTarget}\`)\n⏱ 检测时间: ${tsStr}\n✅ 状态: 已恢复可达（${ms}ms）`);
+            }
+        }
+        results.push({ prefix: r.prefix, target: mainTarget, status, ms });
+    }
+
+    // 🔁 闭环：主域 DNS 优选 IP 全部不可达 → 触发自动重新优选（自调用独立 invocation，避免占用本调用子请求预算）
+    let autoDnsTriggered = false;
+    try {
+        const autoDns = await getCfg(env, 'auto_dns_enabled', 'on');
+        if (autoDns === 'on' && env.CF_API_TOKEN && env.CF_ZONE_ID && env.CF_DOMAIN) {
+            const getRes = await fetch(`https://api.cloudflare.com/client/v4/zones/${env.CF_ZONE_ID}/dns_records?name=${env.CF_DOMAIN}`, { headers: { 'Authorization': `Bearer ${env.CF_API_TOKEN}` } });
+            const getData = await getRes.json();
+            const ips = (getData.result || []).filter(rec => rec.type === 'A' || rec.type === 'AAAA').map(rec => rec.content).filter(Boolean).slice(0, 3);
+            if (ips.length > 0) {
+                let anyReachable = false;
+                for (const ip of ips) {
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 3000);
+                        await fetch(`https://${ip}/cdn-cgi/trace`, { mode: 'no-cors', signal: controller.signal });
+                        clearTimeout(timeoutId);
+                        anyReachable = true; break;
+                    } catch (e) {}
+                }
+                if (!anyReachable) {
+                    const baseUrl = 'https://' + (env.CF_DOMAIN || 'fandai.erebus.de5.net');
+                    try {
+                        const resp = await fetch(baseUrl + '/api/cron-auto-dns', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Cookie': 'admin_token=' + (env.ADMIN_TOKEN || '') }
+                        });
+                        const j = await resp.json().catch(() => ({}));
+                        autoDnsTriggered = !!(j && j.success);
+                        if (j && j.success) {
+                            await tgNotify(env, `🤖 *闭环自动优选触发*\n\n主域 ${env.CF_DOMAIN} 当前 DNS 优选 IP 全部不可达，已自动重新测速优选并推送新节点。`);
+                        } else {
+                            await tgNotify(env, `⛔ *闭环自动优选失败*\n\n主域 ${env.CF_DOMAIN} 当前 DNS 优选 IP 不可达，但重新优选失败：${(j && j.error) || '未知错误'}`);
+                        }
+                    } catch (e) { console.error('闭环自调用优选失败:', e.message); }
+                }
+            }
+        }
+    } catch (e) { console.error('闭环自动优选检测失败:', e.message); }
+
+    return { success: true, checked: results.length, down: downCount, autoDnsTriggered, results };
+}
 
 // 路径验证：防止路径遍历攻击
 function isValidPath(path) {
@@ -743,7 +870,7 @@ const HTML_UI = `
     <nav class="top-nav">
         <div class="nav-left">
             <span class="nav-brand">智能反代系统</span>
-            <span class="nav-version">v1.2.2</span>
+            <span class="nav-version">v1.2.3</span>
             <div class="nav-trace">
                 <div class="nav-trace-item">
                     <span class="nav-trace-icon">📍</span>
@@ -816,7 +943,7 @@ const HTML_UI = `
             <div class="section-header" style="margin-bottom:0;">
                 <div>
                     <div class="section-title" style="color: var(--success);">✨ 发现新版本！</div>
-                    <p style="font-size: 13px; color: var(--text-sec); margin-top: 4px;" id="updateMsg">当前版本: v1.2.2 | 最新版本: v?.?.?</p>
+                    <p style="font-size: 13px; color: var(--text-sec); margin-top: 4px;" id="updateMsg">当前版本: v1.2.3 | 最新版本: v?.?.?</p>
                 </div>
                 <button class="btn-submit" onclick="doOnlineUpdate()" id="onlineUpdateBtn" style="background: linear-gradient(135deg, var(--success), #059669);">🚀 一键拉取并升级</button>
             </div>
@@ -1074,6 +1201,30 @@ const HTML_UI = `
                 </div>
             </div>
     <div class="card">
+        <div class="section-header">
+            <div class="section-title">🔁 自动化闭环</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <span style="font-weight:600;">🔍 节点主动健康检查</span>
+                <label class="tg-toggle-switch"><input type="checkbox" id="healthCheckToggle" onchange="toggleHealthCheck()"><span class="tg-toggle-slider"></span></label>
+                <span id="healthCheckStatus" style="color:var(--text-sec); font-size:13px;">加载中...</span>
+                <button class="btn-outline" onclick="runHealthCheck()" style="margin-left:auto;">⚡ 立即健康检查</button>
+            </div>
+            <div style="font-size:12px;color:var(--text-sec);">每 6 小时自动 ping 所有节点源站并写入健康状态，节点不可达/恢复时推送 TG 告警；健康状态实时显示在节点卡片上。</div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <span style="font-weight:600;">🌟 自动优选 DNS（闭环）</span>
+                <label class="tg-toggle-switch"><input type="checkbox" id="autoDnsToggle" onchange="toggleAutoDns()"><span class="tg-toggle-slider"></span></label>
+                <span id="autoDnsStatus" style="color:var(--text-sec); font-size:13px;">加载中...</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-sec);">开启后，若主域当前 DNS 优选 IP 全部不可达，系统自动重新测速优选并推送新节点，形成自愈闭环。</div>
+            <div class="info-panel" style="margin-top:4px;">
+                <div class="info-panel-label">📡 上次自动优选 DNS：</div>
+                <div id="autoDnsLastRun" style="font-size:13px;color:var(--text-sec);">加载中...</div>
+            </div>
+        </div>
+    </div>
+    <div class="card">
             <div class="section-header">
                 <div class="section-title">⚙️ Worker 调度模式与区域设置</div>
             </div>
@@ -1211,7 +1362,7 @@ const HTML_UI = `
     </div>
 
     <script>
-        const CURRENT_VERSION = '1.2.2';
+        const CURRENT_VERSION = '1.2.3';
         const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PzErebus/fandai/main/worker.js';
         const CF_DOMAIN = 'fandai.erebus.de5.net';
         
@@ -1323,6 +1474,82 @@ const HTML_UI = `
                     showToast('❌ ' + (data.error || '设置失败'));
                 }
             } catch(e) { toggle.checked = !enabled; showToast('❌ 网络错误'); }
+        }
+
+        async function loadAutoSwitches() {
+            try {
+                const r1 = await fetch('/api/get-cfg?key=auto_healthcheck'); const d1 = await r1.json();
+                const hc = document.getElementById('healthCheckToggle'); const hcs = document.getElementById('healthCheckStatus');
+                if (hc && hcs && d1.success) {
+                    const on = d1.value !== 'off';
+                    hc.checked = on; hcs.textContent = on ? '已开启' : '已关闭';
+                    hcs.style.color = on ? 'var(--success)' : 'var(--danger)';
+                }
+                const r2 = await fetch('/api/get-cfg?key=auto_dns_enabled'); const d2 = await r2.json();
+                const ad = document.getElementById('autoDnsToggle'); const ads = document.getElementById('autoDnsStatus');
+                if (ad && ads && d2.success) {
+                    const on = d2.value !== 'off';
+                    ad.checked = on; ads.textContent = on ? '已开启' : '已关闭';
+                    ads.style.color = on ? 'var(--success)' : 'var(--danger)';
+                }
+                const r3 = await fetch('/api/auto-dns-status'); const d3 = await r3.json();
+                const lr = document.getElementById('autoDnsLastRun');
+                if (lr && d3.success) {
+                    if (!d3.lastRun) { lr.textContent = '尚未运行'; }
+                    else {
+                        const topNodes = d3.lastRun.topNodes || [];
+                        let nodeStr = '';
+                        for (let i = 0; i < topNodes.length; i++) {
+                            if (i > 0) nodeStr += '，';
+                            nodeStr += '#' + (i + 1) + ' ' + topNodes[i].ip + ' (' + topNodes[i].latency + 'ms)';
+                        }
+                        const trig = d3.lastRun.triggerType === 'auto' ? '自动' : '手动';
+                        lr.innerHTML = '⏱ ' + d3.lastRun.createdAt + '（' + trig + '）<br>🌟 ' + (nodeStr || '无节点');
+                    }
+                }
+            } catch(e) { console.warn('加载自动化开关失败:', e); }
+        }
+
+        async function toggleHealthCheck() {
+            const toggle = document.getElementById('healthCheckToggle');
+            const status = document.getElementById('healthCheckStatus');
+            if (!toggle || !status) return;
+            const enabled = toggle.checked;
+            try {
+                const res = await fetch('/api/set-cfg', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'auto_healthcheck', value: enabled ? 'on' : 'off' }) });
+                const data = await res.json();
+                if (data.success) { status.textContent = enabled ? '已开启' : '已关闭'; status.style.color = enabled ? 'var(--success)' : 'var(--danger)'; showToast(enabled ? '🔍 节点主动健康检查已开启' : '⏸ 节点主动健康检查已关闭'); }
+                else { toggle.checked = !enabled; showToast('❌ ' + (data.error || '设置失败')); }
+            } catch(e) { toggle.checked = !enabled; showToast('❌ 网络错误'); }
+        }
+
+        async function toggleAutoDns() {
+            const toggle = document.getElementById('autoDnsToggle');
+            const status = document.getElementById('autoDnsStatus');
+            if (!toggle || !status) return;
+            const enabled = toggle.checked;
+            try {
+                const res = await fetch('/api/set-cfg', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'auto_dns_enabled', value: enabled ? 'on' : 'off' }) });
+                const data = await res.json();
+                if (data.success) { status.textContent = enabled ? '已开启' : '已关闭'; status.style.color = enabled ? 'var(--success)' : 'var(--danger)'; showToast(enabled ? '🌟 自动优选 DNS（闭环）已开启' : '⏸ 自动优选 DNS（闭环）已关闭'); }
+                else { toggle.checked = !enabled; showToast('❌ ' + (data.error || '设置失败')); }
+            } catch(e) { toggle.checked = !enabled; showToast('❌ 网络错误'); }
+        }
+
+        async function runHealthCheck() {
+            try {
+                showToast('🔍 正在执行节点健康检查...');
+                const res = await fetch('/api/health-check', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    let msg = '✅ 健康检查完成：检测 ' + data.checked + ' 个节点，异常 ' + data.down + ' 个';
+                    if (data.autoDnsTriggered) msg += '，已触发闭环优选';
+                    showToast(msg);
+                    if (typeof load === 'function') load();
+                } else {
+                    showToast('❌ 健康检查失败：' + (data.error || '未知错误'));
+                }
+            } catch(e) { showToast('❌ 网络错误'); }
         }
 
         async function toggleBotNotification() {
@@ -1899,6 +2126,14 @@ const HTML_UI = `
 
                     proxyNodesForPing.push({ idx: idx, url: mainTarget, prefix: r.prefix });
 
+                    // 健康状态指示
+                    const healthDot = r.healthStatus === 'up' ? '<span title="节点健康" style="font-size:14px;line-height:1;">🟢</span>' : r.healthStatus === 'down' ? '<span title="节点不可达" style="font-size:14px;line-height:1;">🔴</span>' : '<span title="尚未检查" style="font-size:14px;line-height:1;">⚪</span>';
+                    let healthText = r.healthStatus === 'up' ? '🟢 健康' : r.healthStatus === 'down' ? '🔴 不可达' : '⚪ 未检查';
+                    if (r.healthTs) {
+                        const ts = new Date(r.healthTs + 8 * 3600000).toISOString().replace('T', ' ').slice(0, 19);
+                        healthText += ' · ' + ts;
+                    }
+
                     container.innerHTML += \`
                     <div class="emby-card route-item" data-prefix="\${r.prefix}" data-search="\${remarkName} \${r.prefix}">
                         <div class="card-header">
@@ -1912,6 +2147,7 @@ const HTML_UI = `
                                 </div>
                             </div>
                             <span class="badge" style="background: rgba(99,102,241,0.08); color: var(--primary);">\${modeNames[r.mode] || '未知'}</span>
+                            \${healthDot}
                         </div>
 
                         <div class="node-stats">
@@ -1929,6 +2165,10 @@ const HTML_UI = `
                             <summary>查看详情</summary>
                             <div class="node-details-body">
                         <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div class="info-row">
+                                <span class="info-label">健康检查:</span>
+                                <span style="font-size:12px; font-weight:600; color:\${r.healthStatus === 'down' ? 'var(--danger)' : r.healthStatus === 'up' ? 'var(--success)' : 'var(--text-sec)'};">\${healthText}</span>
+                            </div>
                             <div class="info-row">
                                 <span class="info-label">节点延迟:</span>
                                 <span id="ping-\${idx}" class="ping-badge" onclick="pingTarget(\${idx}, '\${mainTarget}', '\${r.prefix}')" title="点击重新测速">测速中...</span>
@@ -2673,6 +2913,7 @@ const HTML_UI = `
             setTimeout(fetchCfTrace, 500);
             loadBotConfig();
             loadFailoverConfig();
+            loadAutoSwitches();
         });
     // 🚀 新增：全云厂商节点数据库 (包含 Cloudflare 支持的所有主要区域)
         var cfRegions = {
@@ -3907,6 +4148,17 @@ export default {
                 }
             })());
         }
+
+        // 🔍 节点主动健康检查（每 6 小时联动；受 auto_healthcheck 开关控制）
+        if (env.DB) {
+            ctx.waitUntil((async () => {
+                let enabled = true;
+                try { const row = await env.DB.prepare('SELECT value FROM system_config WHERE key = ?').bind('auto_healthcheck').first(); if (row && row.value === 'off') enabled = false; } catch(e) {}
+                if (!enabled) return;
+                const result = await healthCheckAllNodes(env);
+                console.log('Health Check Result:', JSON.stringify(result));
+            })());
+        }
     },
 
     async fetch(request, env, ctx) {
@@ -4467,6 +4719,34 @@ self.addEventListener('fetch',e=>{
             return Response.json({ ms });
         }
 
+        // 🔍 手动触发节点主动健康检查（后台「立即健康检查」按钮调用）
+        if (url.pathname === '/api/health-check' && request.method === 'POST') {
+            const result = await healthCheckAllNodes(env);
+            return Response.json(result);
+        }
+
+        // 🤖 闭环自调用：在独立 invocation 中执行自动优选 DNS（受 admin cookie 保护）
+        if (url.pathname === '/api/cron-auto-dns' && request.method === 'POST') {
+            const providedToken = getCookie(request, 'admin_token');
+            if (providedToken !== (env.ADMIN_TOKEN || '')) {
+                return Response.json({ success: false, error: '未授权' }, { status: 401 });
+            }
+            const result = await autoUpdateDNS(env, { domain: env.CF_DOMAIN });
+            return Response.json(result);
+        }
+
+        // 📊 上次自动优选 DNS 状态（供面板展示）
+        if (url.pathname === '/api/auto-dns-status' && request.method === 'GET') {
+            if (!env.DB) return Response.json({ success: false, error: '未绑定 D1' });
+            try {
+                const row = await env.DB.prepare('SELECT id, trigger_type, created_at, nodes_json FROM dns_update_history ORDER BY id DESC LIMIT 1').first();
+                if (!row) return Response.json({ success: true, lastRun: null });
+                let nodes = [];
+                try { nodes = JSON.parse(row.nodes_json || '[]'); } catch (e) {}
+                return Response.json({ success: true, lastRun: { id: row.id, triggerType: row.trigger_type, createdAt: row.created_at, topNodes: nodes } });
+            } catch (e) { return Response.json({ success: false, error: e.message }); }
+        }
+
         if (url.pathname === '/api/ping-history') {
             if (!env.DB) return Response.json({ success: false, error: '未绑定 D1' });
             try {
@@ -4913,6 +5193,20 @@ ${linkHtml}
 
                 // 用 D1 缓存的字节数直接给出今日流量（首屏即时渲染，不阻塞）
                 (routes || []).forEach(r => { r.todayBandwidth = formatBytes(r.todayBytes || 0); });
+
+                // 🔍 附带节点主动健康检查结果（node_health 按主源站 URL 记录）
+                let healthMap = {};
+                try {
+                    await ensureNodeHealth(env);
+                    const { results: hrows } = await env.DB.prepare('SELECT target, status, ts FROM node_health').all();
+                    (hrows || []).forEach(h => { healthMap[h.target] = h; });
+                } catch (e) {}
+                (routes || []).forEach(r => {
+                    const mainTarget = (r.target || '').split(',')[0].trim();
+                    const h = mainTarget ? healthMap[mainTarget] : null;
+                    r.healthStatus = h ? h.status : null;   // 'up' | 'down' | null(未检查)
+                    r.healthTs = h ? h.ts : 0;
+                });
 
                 // 后台刷新今日流量缓存：并发向 CF GraphQL 拉取各节点精准流量并写回 D1
                 if (env.CF_API_TOKEN && env.CF_ZONE_ID && routes && routes.length > 0) {
