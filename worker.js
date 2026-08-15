@@ -1,4 +1,4 @@
-// VERSION: 1.2.2
+// VERSION: 1.2.3
 
 // ==========================================
 // 安全工具函数 (Security Utilities)
@@ -177,9 +177,9 @@ const SVG_TG = `<svg viewBox="0 0 24 24" style="width:20px;height:20px;margin-ri
 
 const CSS_COMMON = `
     :root {
-        --primary: #6366f1;
-        --primary-hover: #4f46e5;
-        --primary-end: #8b5cf6;
+        --primary: #10b981;
+        --primary-hover: #059669;
+        --primary-end: #14b8a6;
         --bg: #f8f9fb;
         --card: rgba(255,255,255,0.72);
         --card-solid: #ffffff;
@@ -189,10 +189,10 @@ const CSS_COMMON = `
         --border-solid: #e5e7eb;
         --radius-card: 16px;
         --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 24px rgba(0,0,0,0.03);
-        --shadow-hover: 0 8px 32px rgba(99,102,241,0.1), 0 2px 8px rgba(0,0,0,0.04);
+        --shadow-hover: 0 8px 32px rgba(16,185,129,0.1), 0 2px 8px rgba(0,0,0,0.04);
         --glass-bg: rgba(255,255,255,0.6);
         --glass-border: rgba(255,255,255,0.3);
-        --success: #10b981;
+        --success: #22c55e;
         --warning: #f59e0b;
         --danger: #ef4444;
         --info: #3b82f6;
@@ -200,19 +200,19 @@ const CSS_COMMON = `
     }
 
     body.dark {
-        --primary: #818cf8;
-        --primary-hover: #6366f1;
-        --primary-end: #a78bfa;
-        --bg: #0f0f0f;
-        --card: rgba(30,30,30,0.72);
-        --card-solid: #1a1a1a;
+        --primary: #34d399;
+        --primary-hover: #10b981;
+        --primary-end: #5eead4;
+        --bg: #0b1120;
+        --card: rgba(17,25,35,0.72);
+        --card-solid: #131c26;
         --text: #f3f4f6;
         --text-sec: #9ca3af;
-        --border: rgba(255,255,255,0.06);
-        --border-solid: #2a2a2a;
-        --shadow-card: 0 1px 3px rgba(0,0,0,0.2), 0 4px 24px rgba(0,0,0,0.15);
-        --shadow-hover: 0 8px 32px rgba(129,140,248,0.15), 0 2px 8px rgba(0,0,0,0.2);
-        --glass-bg: rgba(30,30,30,0.6);
+        --border: rgba(255,255,255,0.07);
+        --border-solid: #243140;
+        --shadow-card: 0 1px 3px rgba(0,0,0,0.25), 0 4px 24px rgba(0,0,0,0.2);
+        --shadow-hover: 0 8px 32px rgba(52,211,153,0.18), 0 2px 8px rgba(0,0,0,0.25);
+        --glass-bg: rgba(13,20,30,0.6);
         --glass-border: rgba(255,255,255,0.08);
     }
 
@@ -245,14 +245,14 @@ const CSS_COMMON = `
     .nav-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s ease; white-space: nowrap; }
     .nav-btn:hover { background: var(--border); }
     .nav-btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-end)); color: white; border: none; }
-    .nav-btn-primary:hover { opacity: 0.9; box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
+    .nav-btn-primary:hover { opacity: 0.9; box-shadow: 0 4px 12px rgba(16,185,129,0.3); }
     .nav-btn-danger { color: var(--danger); border-color: rgba(239,68,68,0.2); }
     .nav-btn-danger:hover { background: rgba(239,68,68,0.08); }
     .nav-theme-btn { width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; border-radius: 10px; }
 
     .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
-    .btn-submit { padding: 10px 18px; background: linear-gradient(135deg, var(--primary), var(--primary-end)); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; transition: all 0.25s ease; box-shadow: 0 2px 8px rgba(99,102,241,0.25); }
-    .btn-submit:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(99,102,241,0.35); }
+    .btn-submit { padding: 10px 18px; background: linear-gradient(135deg, var(--primary), var(--primary-end)); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; transition: all 0.25s ease; box-shadow: 0 2px 8px rgba(16,185,129,0.25); }
+    .btn-submit:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(16,185,129,0.35); }
     .btn-submit:active { transform: translateY(0); }
     .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
     .btn-outline { padding: 10px 18px; background: transparent; color: var(--text); border: 1px solid var(--border-solid); border-radius: 10px; cursor: pointer; font-weight: 500; font-size: 13px; white-space: nowrap; transition: all 0.2s ease; }
@@ -265,21 +265,21 @@ const CSS_COMMON = `
     th, td { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
     th { color: var(--text-sec); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(120,120,120,0.03); }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background-color: rgba(99,102,241,0.03); }
+    tr:hover td { background-color: rgba(16,185,129,0.03); }
 
     .action-group { display: inline-flex; gap: 6px; background: rgba(120,120,120,0.04); padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border); align-items: flex-start; max-width: 100%; flex-wrap: wrap; }
     .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; border: none; background: transparent; cursor: pointer; color: var(--text-sec); padding: 0; transition: all 0.2s ease; flex-shrink: 0; font-size: 16px; }
-    .icon-btn:hover { color: var(--primary); background: rgba(99,102,241,0.08); }
+    .icon-btn:hover { color: var(--primary); background: rgba(16,185,129,0.08); }
     .icon-btn svg { width: 15px; height: 15px; fill: currentColor; }
 
     .badge { padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-block; letter-spacing: 0.3px; }
 
-    .btn-edit { padding: 7px 14px; background: transparent; color: var(--primary); border: 1px solid rgba(99,102,241,0.3); border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s ease; }
-    .btn-edit:hover { background: rgba(99,102,241,0.08); border-color: var(--primary); }
+    .btn-edit { padding: 7px 14px; background: transparent; color: var(--primary); border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s ease; }
+    .btn-edit:hover { background: rgba(16,185,129,0.08); border-color: var(--primary); }
     .btn-del { padding: 7px 14px; background: transparent; color: var(--danger); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s ease; }
     .btn-del:hover { background: rgba(239,68,68,0.08); border-color: var(--danger); }
-    .btn-dns { padding: 7px 14px; background: transparent; color: var(--success); border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s ease; white-space: nowrap; }
-    .btn-dns:hover { background: rgba(16,185,129,0.08); border-color: var(--success); }
+    .btn-dns { padding: 7px 14px; background: transparent; color: var(--success); border: 1px solid rgba(34,197,94,0.3); border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s ease; white-space: nowrap; }
+    .btn-dns:hover { background: rgba(34,197,94,0.08); border-color: var(--success); }
     .btn-dns:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .ip-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary); border-radius: 4px; }
@@ -294,23 +294,23 @@ const CSS_COMMON = `
 
     .search-input { padding: 9px 14px; border: 1px solid var(--border-solid); border-radius: 10px; background: var(--card-solid); color: var(--text); font-size: 13px; width: 240px; transition: all 0.3s ease; }
     body.dark .search-input { background: #1a1a1a; }
-    .search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+    .search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(16,185,129,0.12); }
 
     .node-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; margin-top: 16px; }
     .emby-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 20px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; gap: 14px; transition: all 0.3s ease; position: relative; backdrop-filter: blur(20px); }
-    .emby-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); border-color: rgba(99,102,241,0.15); }
+    .emby-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); border-color: rgba(16,185,129,0.15); }
     .card-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
     .card-title-group { display: flex; align-items: center; gap: 10px; }
-    .emby-icon { font-size: 24px; background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08)); border-radius: 10px; padding: 8px; border: 1px solid rgba(99,102,241,0.1); display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; }
+    .emby-icon { font-size: 24px; background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(139,92,246,0.08)); border-radius: 10px; padding: 8px; border: 1px solid rgba(16,185,129,0.1); display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; }
     .info-row { display: flex; align-items: flex-start; justify-content: space-between; font-size: 13px; }
     .info-label { color: var(--text-sec); font-weight: 500; min-width: 65px; margin-top: 2px; font-size: 12px; }
     .card-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border); }
 
     .ping-badge { color: var(--text-sec); cursor: pointer; padding: 3px 10px; background: rgba(120,120,120,0.04); border-radius: 6px; font-size: 12px; font-weight: 600; transition: all 0.2s ease; border: 1px solid transparent; user-select: none; font-family: "SF Mono", monospace; }
-    .ping-badge:hover { border-color: var(--primary); background: rgba(99,102,241,0.06); color: var(--primary); }
+    .ping-badge:hover { border-color: var(--primary); background: rgba(16,185,129,0.06); color: var(--primary); }
 
     .icon-item { cursor: pointer; padding: 6px; border-radius: 10px; border: 1px solid transparent; display: flex; justify-content: center; align-items: center; transition: all 0.2s ease; background: var(--border); height: 44px; }
-    .icon-item:hover { border-color: var(--primary) !important; box-shadow: 0 2px 8px rgba(99,102,241,0.2); transform: scale(1.05); }
+    .icon-item:hover { border-color: var(--primary) !important; box-shadow: 0 2px 8px rgba(16,185,129,0.2); transform: scale(1.05); }
     #iconGrid::-webkit-scrollbar { width: 4px; }
     #iconGrid::-webkit-scrollbar-thumb { background: var(--border-solid); border-radius: 2px; }
 
@@ -334,9 +334,9 @@ const CSS_COMMON = `
 
     .form-input { padding: 10px 14px; border: 1px solid var(--border-solid); border-radius: 10px; background: var(--card-solid); color: var(--text); transition: all 0.2s ease; }
     body.dark .form-input { background: #1a1a1a; }
-    .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(16,185,129,0.1); }
 
-    .node-stats { background: rgba(99,102,241,0.04); border: 1px solid rgba(99,102,241,0.08); border-radius: 10px; padding: 12px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    .node-stats { background: rgba(16,185,129,0.04); border: 1px solid rgba(16,185,129,0.08); border-radius: 10px; padding: 12px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
     .node-stat-item { display: flex; flex-direction: column; gap: 2px; }
     .node-stat-label { font-size: 11px; color: var(--text-sec); }
     .node-stat-value { font-size: 15px; font-weight: 700; }
@@ -348,10 +348,10 @@ const CSS_COMMON = `
     .node-details[open] summary::before { transform: rotate(90deg); }
     .node-details-body { display: flex; flex-direction: column; gap: 12px; padding-top: 10px; }
 
-    .batch-bar { background: rgba(99,102,241,0.04); padding: 12px 16px; border-radius: 12px; border: 1px dashed rgba(99,102,241,0.2); margin-bottom: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .batch-bar { background: rgba(16,185,129,0.04); padding: 12px 16px; border-radius: 12px; border: 1px dashed rgba(16,185,129,0.2); margin-bottom: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .batch-divider { width: 1px; height: 20px; background: var(--border-solid); }
 
-    .status-msg { line-height: 1.6; font-size: 13px; color: var(--text-sec); padding: 12px 16px; border-radius: 10px; border-left: 3px solid var(--success); background: rgba(16,185,129,0.04); }
+    .status-msg { line-height: 1.6; font-size: 13px; color: var(--text-sec); padding: 12px 16px; border-radius: 10px; border-left: 3px solid var(--success); background: rgba(34,197,94,0.04); }
 
     .alert-card { border-left: 3px solid var(--success); }
     .alert-card.danger { border-left-color: var(--danger); }
@@ -364,7 +364,7 @@ const CSS_COMMON = `
     .modal-header { padding: 24px 24px 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
     .modal-title { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; }
     .modal-title-sub { font-size: 13px; font-weight: normal; color: var(--text-sec); }
-    .modal-traffic-bar { font-size: 12px; background: rgba(99,102,241,0.06); color: var(--primary); padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(99,102,241,0.1); display: flex; gap: 16px; flex-wrap: wrap; font-weight: 500; }
+    .modal-traffic-bar { font-size: 12px; background: rgba(16,185,129,0.06); color: var(--primary); padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(16,185,129,0.1); display: flex; gap: 16px; flex-wrap: wrap; font-weight: 500; }
     .modal-body { padding: 20px 24px 24px; }
     .chart-row { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 20px; }
     .chart-col { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: rgba(120,120,120,0.02); }
@@ -389,7 +389,7 @@ const CSS_COMMON = `
     .tg-console-desc { font-size: 12px; color: var(--text-sec); margin-bottom: 16px; }
     .tg-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
     .tg-tag { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; background: rgba(0,136,204,0.08); color: #0088cc; border: 1px solid rgba(0,136,204,0.15); }
-    .tg-tag.success { background: rgba(16,185,129,0.08); color: var(--success); border-color: rgba(16,185,129,0.15); }
+    .tg-tag.success { background: rgba(34,197,94,0.08); color: var(--success); border-color: rgba(34,197,94,0.15); }
     .tg-tag.warn { background: rgba(245,158,11,0.08); color: var(--warning); border-color: rgba(245,158,11,0.15); }
     
     /* Bot推送开关 */
@@ -402,7 +402,7 @@ const CSS_COMMON = `
     .tg-toggle-switch input:checked + .tg-toggle-slider { background-color: var(--success); }
     .tg-toggle-switch input:checked + .tg-toggle-slider:before { transform: translateX(20px); }
     .tg-toggle-status { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; }
-    .tg-toggle-status.on { background: rgba(16,185,129,0.08); color: var(--success); }
+    .tg-toggle-status.on { background: rgba(34,197,94,0.08); color: var(--success); }
     .tg-toggle-status.off { background: rgba(239,68,68,0.08); color: var(--danger); }
     .tg-tag.warn { background: rgba(245,158,11,0.08); color: var(--warning); border-color: rgba(245,158,11,0.15); }
     .tg-main { display: flex; flex-direction: column; gap: 16px; }
@@ -411,14 +411,14 @@ const CSS_COMMON = `
     .tg-btn { padding: 12px 16px; border-radius: 10px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 6px; color: white; }
     .tg-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .tg-btn-blue { background: linear-gradient(135deg, #0088cc, #00a8e6); }
-    .tg-btn-green { background: linear-gradient(135deg, #10b981, #059669); }
-    .tg-btn-purple { background: linear-gradient(135deg, #8b5cf6, #6366f1); }
+    .tg-btn-green { background: linear-gradient(135deg, #22c55e, #059669); }
+    .tg-btn-purple { background: linear-gradient(135deg, #14b8a6, #10b981); }
     .tg-btn-orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
     .tg-webhook { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
     .tg-webhook-input { flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-solid); background: var(--card-solid); font-size: 12px; font-family: monospace; color: var(--text-sec); }
     .tg-webhook-btn { padding: 8px 14px; background: linear-gradient(135deg, var(--primary), var(--primary-end)); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap; }
     .tg-status { margin-top: 10px; padding: 8px 12px; border-radius: 8px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
-    .tg-status.success { background: rgba(16,185,129,0.06); color: var(--success); }
+    .tg-status.success { background: rgba(34,197,94,0.06); color: var(--success); }
     .tg-status.error { background: rgba(239,68,68,0.06); color: var(--danger); }
     .tg-commands-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: var(--text); }
     .tg-commands { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -544,15 +544,15 @@ const LOGIN_UI = `
         body { display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; margin: 0; background: var(--bg); }
         .login-wrapper { width: 100%; max-width: 400px; }
         .login-card { background: var(--card); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); padding: 40px 32px; border-radius: 20px; box-shadow: var(--shadow-card); border: 1px solid var(--border); text-align: center; }
-        .login-logo { width: 56px; height: 56px; margin: 0 auto 20px; background: linear-gradient(135deg, var(--primary), var(--primary-end)); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 4px 16px rgba(99,102,241,0.3); }
+        .login-logo { width: 56px; height: 56px; margin: 0 auto 20px; background: linear-gradient(135deg, var(--primary), var(--primary-end)); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 4px 16px rgba(16,185,129,0.3); }
         .login-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
         .login-subtitle { font-size: 13px; color: var(--text-sec); margin-bottom: 28px; }
         .login-input { width: 100%; padding: 14px 16px; margin-bottom: 16px; border: 1px solid var(--border-solid); border-radius: 12px; background: var(--card-solid); color: var(--text); font-size: 14px; transition: all 0.2s ease; }
         body.dark .login-input { background: #1a1a1a; border-color: #2a2a2a; }
-        .login-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+        .login-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(16,185,129,0.12); }
         .login-input::placeholder { color: var(--text-sec); }
-        .login-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--primary), var(--primary-end)); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.25s ease; box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
-        .login-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,0.4); }
+        .login-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--primary), var(--primary-end)); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.25s ease; box-shadow: 0 4px 12px rgba(16,185,129,0.3); }
+        .login-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(16,185,129,0.4); }
         .login-btn:active { transform: translateY(0); }
     </style>
 </head>
@@ -592,27 +592,28 @@ const LANDING_UI = `
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>智能反代系统 · 访问地址</title>
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#6366f1">
+<meta name="theme-color" content="#10b981">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{
-  --bg:#0f1115; --card:#171a21; --border:#262b36; --text:#e8eaed; --text-sec:#9aa3b2;
-  --primary:#6366f1; --primary-end:#8b5cf6;
+  --bg:#0b1120; --card:#131c26; --border:#243140; --text:#e8eaed; --text-sec:#9aa3b2;
+  --primary:#10b981; --primary-end:#14b8a6;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;background:radial-gradient(1200px 600px at 50% -10%,#1b2030,#0f1115);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:48px 16px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;background:radial-gradient(1200px 600px at 50% -10%,#0f3d2e,#0b1120);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:48px 16px}
 .wrap{width:100%;max-width:640px}
 .head{text-align:center;margin-bottom:36px}
-.logo{width:64px;height:64px;border-radius:18px;margin:0 auto 16px;background:linear-gradient(135deg,var(--primary),var(--primary-end));display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 8px 24px rgba(99,102,241,.35)}
+.logo{width:64px;height:64px;border-radius:18px;margin:0 auto 16px;background:linear-gradient(135deg,var(--primary),var(--primary-end));display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 8px 24px rgba(16,185,129,.35)}
 .head h1{font-size:24px;font-weight:700;margin-bottom:8px}
 .head p{color:var(--text-sec);font-size:14px;line-height:1.6}
-.cards{display:flex;flex-direction:column;gap:14px}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:16px;transition:.2s}
-.card.active{border-color:var(--primary);box-shadow:0 0 0 3px rgba(99,102,241,.18)}
+.cards .card:first-child{grid-column:1/-1}
+.card.active{border-color:var(--primary);box-shadow:0 0 0 3px rgba(16,185,129,.18)}
 .icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
 .icon svg{width:28px;height:28px;display:block}
-.icon.tri{background:rgba(99,102,241,.15);color:#a5b4fc;font-size:24px}
+.icon.tri{background:rgba(16,185,129,.15);color:#6ee7b7;font-size:24px}
 .icon.dx{background:#E60012}
 .icon.lt{background:#E60012}
 .icon.yd{background:#0085D0}
@@ -620,12 +621,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC
 .carrier{font-size:15px;font-weight:600;margin-bottom:3px}
 .url{font-size:13px;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .acts{display:flex;gap:8px;flex-shrink:0}
-.btn{border:1px solid var(--border);background:#1f2430;color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;cursor:pointer;text-decoration:none;transition:.15s;white-space:nowrap}
+.btn{border:1px solid var(--border);background:#1a2433;color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;cursor:pointer;text-decoration:none;transition:.15s;white-space:nowrap}
 .btn:hover{border-color:var(--primary);color:#fff}
 .btn.primary{background:linear-gradient(135deg,var(--primary),var(--primary-end));border:none;color:#fff}
 .foot{margin-top:32px;text-align:center;font-size:13px;color:var(--text-sec)}
 .foot a{color:var(--primary);text-decoration:none}
-.tag{display:inline-block;font-size:11px;color:var(--text-sec);background:#1f2430;border:1px solid var(--border);padding:2px 8px;border-radius:999px;margin-left:8px}
+.tag{display:inline-block;font-size:11px;color:var(--text-sec);background:#1a2433;border:1px solid var(--border);padding:2px 8px;border-radius:999px;margin-left:8px}
 .services{margin-top:28px}
 .services > summary{font-size:15px;font-weight:600;color:var(--text-sec);display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;user-select:none;padding:6px 2px;margin-bottom:0}
 .services > summary::-webkit-details-marker{display:none}
@@ -636,7 +637,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC
 .svc-list{display:flex;flex-direction:column;gap:10px}
 .svc{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:14px;transition:.15s}
 .svc:hover{border-color:var(--primary)}
-.svc-icon{width:40px;height:40px;border-radius:10px;background:rgba(99,102,241,.12);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;overflow:hidden}
+.svc-icon{width:40px;height:40px;border-radius:10px;background:rgba(16,185,129,.12);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;overflow:hidden}
 .svc-icon img{width:100%;height:100%;object-fit:cover}
 .svc-info{flex:1;min-width:0}
 .svc-name{font-size:14px;font-weight:600;margin-bottom:2px}
@@ -645,6 +646,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC
 .svc-status.online{background:#22c55e;animation:none;box-shadow:0 0 0 4px rgba(34,197,94,.15)}
 .svc-status.offline{background:#ef4444;animation:none;box-shadow:0 0 0 4px rgba(239,68,68,.15)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@media(max-width:560px){.cards{grid-template-columns:1fr}.cards .card:first-child{grid-column:auto}}
 </style>
 </head>
 <body>
@@ -743,7 +745,7 @@ const HTML_UI = `
     <nav class="top-nav">
         <div class="nav-left">
             <span class="nav-brand">智能反代系统</span>
-            <span class="nav-version">v1.2.2</span>
+            <span class="nav-version">v1.2.3</span>
             <div class="nav-trace">
                 <div class="nav-trace-item">
                     <span class="nav-trace-icon">📍</span>
@@ -816,7 +818,7 @@ const HTML_UI = `
             <div class="section-header" style="margin-bottom:0;">
                 <div>
                     <div class="section-title" style="color: var(--success);">✨ 发现新版本！</div>
-                    <p style="font-size: 13px; color: var(--text-sec); margin-top: 4px;" id="updateMsg">当前版本: v1.2.2 | 最新版本: v?.?.?</p>
+                    <p style="font-size: 13px; color: var(--text-sec); margin-top: 4px;" id="updateMsg">当前版本: v1.2.3 | 最新版本: v?.?.?</p>
                 </div>
                 <button class="btn-submit" onclick="doOnlineUpdate()" id="onlineUpdateBtn" style="background: linear-gradient(135deg, var(--success), #059669);">🚀 一键拉取并升级</button>
             </div>
@@ -828,12 +830,12 @@ const HTML_UI = `
                 <div class="section-header">
                     <div class="section-title" style="color: var(--success);">&#x1F916; 智能DNS自动调度</div>
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                        <span id="autoDnsStatus" class="badge" style="background:rgba(16,185,129,0.1);color:var(--success);">运行中</span>
+                        <span id="autoDnsStatus" class="badge" style="background:rgba(34,197,94,0.1);color:var(--success);">运行中</span>
                         <span id="lastUpdateTime" style="font-size:12px;color:var(--text-sec);">加载中...</span>
                     </div>
                 </div>
 
-                <div style="background: rgba(16,185,129,0.04); padding: 16px; border-radius: 12px; border: 1px solid rgba(16,185,129,0.1); margin-bottom: 16px;">
+                <div style="background: rgba(34,197,94,0.04); padding: 16px; border-radius: 12px; border: 1px solid rgba(34,197,94,0.1); margin-bottom: 16px;">
                     <div class="stat-grid" style="margin-bottom:16px;">
                         <div class="stat-item">
                             <div class="stat-label">调度频率</div>
@@ -853,7 +855,7 @@ const HTML_UI = `
                         </div>
                     </div>
 
-                    <div style="background: rgba(99,102,241,0.04); padding: 12px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.1); margin-bottom: 12px;">
+                    <div style="background: rgba(16,185,129,0.04); padding: 12px; border-radius: 10px; border: 1px solid rgba(16,185,129,0.1); margin-bottom: 12px;">
                         <div style="font-size: 13px; color: var(--text-sec); margin-bottom: 10px; font-weight: 500;">&#x1F527; 调度策略配置</div>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                             <select id="autoDnsIspType" class="form-input" style="width: auto; min-width: 140px; font-size: 13px;">
@@ -871,7 +873,7 @@ const HTML_UI = `
                                 <option value="3" selected>TOP 3</option>
                                 <option value="5">TOP 5</option>
                             </select>
-                            <button class="btn-submit" onclick="saveAutoDnsConfig()" style="background: linear-gradient(135deg, #3b82f6, #6366f1); font-size: 13px; padding: 6px 14px;">&#x1F4BE; 保存配置</button>
+                            <button class="btn-submit" onclick="saveAutoDnsConfig()" style="background: linear-gradient(135deg, #3b82f6, #10b981); font-size: 13px; padding: 6px 14px;">&#x1F4BE; 保存配置</button>
                         </div>
                         <div style="font-size: 12px; color: var(--text-sec); margin-top: 8px; line-height: 1.5;">
                             &#x1F4A1; 系统每6小时自动从预设源拉取节点、测速评分，将最优节点推送至DNS。支持移动/电信/联通/多线/IPv6/优选/混合等多种线路策略。
@@ -880,18 +882,18 @@ const HTML_UI = `
 
                     <div style="display:flex;gap:10px;flex-wrap:wrap;">
                         <button class="btn-submit" id="btnManualAutoDns" onclick="manualAutoUpdate()" style="background: linear-gradient(135deg, var(--success), #059669); flex: 1; min-width: 140px;">&#x1F680; 立即执行调度</button>
-                        <button class="btn-submit" id="btnLoadHistory" onclick="loadDnsHistory()" style="background: linear-gradient(135deg, #8b5cf6, #6366f1); flex: 1; min-width: 140px;">&#x1F4CB; 查看执行记录</button>
+                        <button class="btn-submit" id="btnLoadHistory" onclick="loadDnsHistory()" style="background: linear-gradient(135deg, #14b8a6, #10b981); flex: 1; min-width: 140px;">&#x1F4CB; 查看执行记录</button>
                     </div>
                 </div>
 
-                <div style="background: rgba(99,102,241,0.04); padding: 16px; border-radius: 12px; border: 1px solid rgba(99,102,241,0.12); margin-bottom: 16px;">
+                <div style="background: rgba(16,185,129,0.04); padding: 16px; border-radius: 12px; border: 1px solid rgba(16,185,129,0.12); margin-bottom: 16px;">
                     <div class="section-title" style="color: var(--primary); margin-bottom: 8px;">&#x1F30D; 多线子域名调度 <span style="font-size:12px;color:var(--text-sec);font-weight:400;">（按运营商分流）</span></div>
                     <div style="font-size: 12px; color: var(--text-sec); margin-bottom: 12px; line-height: 1.5;">
                         💡 每个子域名独立跑一套运营商优选 IP 并推送到 DNS：<b>yd</b>=移动 / <b>lt</b>=联通 / <b>dx</b>=电信。客户端按自身网络选用对应子域名即可走该运营商最优线路。访问 <code style="background:rgba(120,120,120,.15);padding:2px 6px;border-radius:6px;">/go</code> 可自动识别网络并跳转。
                     </div>
                     <div id="subdomainList" style="display: flex; flex-direction: column; gap: 10px;"></div>
                     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px;">
-                        <button class="btn-submit" onclick="saveSubdomainConfig()" style="background: linear-gradient(135deg, #3b82f6, #6366f1); flex: 1; min-width: 140px;">&#x1F4BE; 保存子域名配置</button>
+                        <button class="btn-submit" onclick="saveSubdomainConfig()" style="background: linear-gradient(135deg, #3b82f6, #10b981); flex: 1; min-width: 140px;">&#x1F4BE; 保存子域名配置</button>
                         <button class="btn-submit" onclick="manualSubdomainUpdate()" style="background: linear-gradient(135deg, var(--success), #059669); flex: 1; min-width: 140px;">&#x1F680; 立即调度全部</button>
                     </div>
                     <div id="subdomainResult" style="display:none; margin-top: 10px; padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.6;"></div>
@@ -1038,13 +1040,13 @@ const HTML_UI = `
                 <div class="info-panel" style="margin-bottom: 16px;">
                     <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap;">
                         <input type="text" id="customApiUrl" class="form-input" value="https://ip.v2too.top/api/nodes" placeholder="填入自定义 JSON 或 文本 API 链接" style="flex: 1; min-width: 200px;">
-                        <button class="btn-submit" id="btnFetchCustomApi" onclick="fetchCustomApiAndTest()" style="background: linear-gradient(135deg, #3b82f6, #6366f1);">🌐 拉取 API 并测速</button>
+                        <button class="btn-submit" id="btnFetchCustomApi" onclick="fetchCustomApiAndTest()" style="background: linear-gradient(135deg, #3b82f6, #10b981);">🌐 拉取 API 并测速</button>
                     </div>
 
                     <textarea id="customIps" rows="2" class="form-input" placeholder="在此粘贴自定义 IPv4、IPv6 或 优选域名 (支持混杂文本，自动提取)" style="width: 100%; margin-bottom: 12px; font-family: 'SF Mono', monospace; resize: vertical;"></textarea>
                     
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button class="btn-submit" id="btnTestCustom" onclick="testCustomIPs()" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">🧪 测试粘贴的节点</button>
+                        <button class="btn-submit" id="btnTestCustom" onclick="testCustomIPs()" style="background: linear-gradient(135deg, #14b8a6, #10b981);">🧪 测试粘贴的节点</button>
                         <button class="btn-submit" id="btnDirectCname" onclick="directSubmitCname()" style="background: linear-gradient(135deg, #a855f7, #7c3aed);">🔗 直推 CNAME (免测速)</button>
                         <button class="btn-danger" id="btnTop3Dns" onclick="updateTop3ToDns()">🌟 更新 TOP3 至 DNS</button>
                         <button class="btn-submit" id="btnSelectedDns" onclick="updateSelectedToDns()" style="background: linear-gradient(135deg, var(--success), #059669);">☑️ 提交选中节点至 DNS</button>
@@ -1211,7 +1213,7 @@ const HTML_UI = `
     </div>
 
     <script>
-        const CURRENT_VERSION = '1.2.2';
+        const CURRENT_VERSION = '1.2.3';
         const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PzErebus/fandai/main/worker.js';
         const CF_DOMAIN = 'fandai.erebus.de5.net';
         
@@ -1496,7 +1498,7 @@ const HTML_UI = `
                     type: 'line',
                     data: {
                         labels: labels,
-                        datasets: [{ label: '有效播放 (次)', data: counts, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3, pointRadius: 2 }]
+                        datasets: [{ label: '有效播放 (次)', data: counts, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 2 }]
                     },
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: {size: 10} } }, y: { ticks: { font: {size: 10} }, beginAtZero: true } } }
                 });
@@ -1509,7 +1511,7 @@ const HTML_UI = `
                     type: 'doughnut',
                     data: {
                         labels: locLabels,
-                        datasets: [{ data: locCounts, backgroundColor: ['#10b981', '#6366f1', '#f59e0b', '#a855f7', '#ef4444', '#6b7280'], borderWidth: 0 }]
+                        datasets: [{ data: locCounts, backgroundColor: ['#22c55e', '#10b981', '#f59e0b', '#a855f7', '#ef4444', '#6b7280'], borderWidth: 0 }]
                     },
                     options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: {size: 10}, padding: 6 } } } }
                 });
@@ -1530,8 +1532,8 @@ const HTML_UI = `
                             map: 'world',
                             backgroundColor: 'transparent',
                             zoomButtons: true,
-                            regionStyle: { initial: { fill: '#2a3140' }, hover: { fill: '#6366f1', fillOpacity: 0.6 } },
-                            series: { regions: [{ values: regionValues, scale: ['#1e3a8a', '#6366f1', '#a855f7'], normalizeFunction: 'polynomial' }] },
+                            regionStyle: { initial: { fill: '#2a3140' }, hover: { fill: '#10b981', fillOpacity: 0.6 } },
+                            series: { regions: [{ values: regionValues, scale: ['#1e3a8a', '#10b981', '#a855f7'], normalizeFunction: 'polynomial' }] },
                             onRegionTooltipShow: (event, tooltip, code) => { tooltip.text(code + '：' + (regionValues[code] || 0) + ' 次播放', true); }
                         });
                     } catch (e) { mapEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-sec);font-size:13px;">地图加载失败</div>'; }
@@ -1546,7 +1548,7 @@ const HTML_UI = `
                         const byPrefix = {};
                         phData.points.forEach(p => { if (!byPrefix[p.prefix]) byPrefix[p.prefix] = {}; byPrefix[p.prefix][p.day] = p.avg_ms; });
                         const days = [...new Set(phData.points.map(p => p.day))].sort();
-                        const palettes = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899'];
+                        const palettes = ['#10b981', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899'];
                         const datasets = Object.keys(byPrefix).map((pfx, i) => ({ label: '/' + pfx, data: days.map(d => byPrefix[pfx][d] ?? null), borderColor: palettes[i % palettes.length], backgroundColor: 'transparent', tension: 0.3, spanGaps: true }));
                         const phCtx = phCanvas.getContext('2d');
                         if (window.__pingHistoryChart) window.__pingHistoryChart.destroy();
@@ -1578,9 +1580,9 @@ const HTML_UI = `
                         const isChina = log.country === 'CN';
                         tr.innerHTML = \`
                             <td data-label="访问时间" style="font-size:12px; white-space:nowrap;">\${log.timestamp}</td>
-                            <td data-label="目标节点"><span class="badge" style="background:rgba(99,102,241,0.08);color:var(--primary);">\${log.prefix}</span></td>
+                            <td data-label="目标节点"><span class="badge" style="background:rgba(16,185,129,0.08);color:var(--primary);">\${log.prefix}</span></td>
                             <td data-label="真实 IP" style="font-family:'SF Mono',monospace; font-size:12px; color:var(--text-sec); word-break:break-all;">\${log.ip}</td>
-                            <td data-label="归属地"><span class="badge" style="background:\${isChina ? 'rgba(16,185,129,0.08)' : 'rgba(245,158,11,0.08)'}; color:\${isChina ? 'var(--success)' : 'var(--warning)'};">\${isChina ? '中国大陆' : (log.country || 'Unknown')}</span></td>
+                            <td data-label="归属地"><span class="badge" style="background:\${isChina ? 'rgba(34,197,94,0.08)' : 'rgba(245,158,11,0.08)'}; color:\${isChina ? 'var(--success)' : 'var(--warning)'};">\${isChina ? '中国大陆' : (log.country || 'Unknown')}</span></td>
                             <td data-label="设备标识 (UA)" style="font-size:11px; color:var(--text-sec); word-break: break-all; white-space: normal; text-align: right; line-height: 1.4;" title="\${log.ua}">\${log.ua}</td>
                         \`;
                         tbody.appendChild(tr);
@@ -1911,7 +1913,7 @@ const HTML_UI = `
                                     <div style="font-size: 12px; color: var(--text-sec); margin-top:1px;">/\${r.prefix}</div>
                                 </div>
                             </div>
-                            <span class="badge" style="background: rgba(99,102,241,0.08); color: var(--primary);">\${modeNames[r.mode] || '未知'}</span>
+                            <span class="badge" style="background: rgba(16,185,129,0.08); color: var(--primary);">\${modeNames[r.mode] || '未知'}</span>
                         </div>
 
                         <div class="node-stats">
@@ -2256,7 +2258,7 @@ const HTML_UI = `
             const isDomain = /[a-zA-Z]/.test(queryIp) && !isIPv6;
             if (isDomain) { locTd.innerHTML = \`<span class="badge" style="background:rgba(168,85,247,0.1);color:#a855f7;margin-right:4px;">CNAME</span> \${sourceLabel} | 优选域名\`;
             } else {
-                const recordLabel = isIPv6 ? '<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;margin-right:4px;">AAAA</span>' : '<span class="badge" style="background:rgba(99,102,241,0.1);color:var(--primary);margin-right:4px;">A记录</span>';
+                const recordLabel = isIPv6 ? '<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;margin-right:4px;">AAAA</span>' : '<span class="badge" style="background:rgba(16,185,129,0.1);color:var(--primary);margin-right:4px;">A记录</span>';
                 fetch(\`https://api.ip.sb/geoip/\${queryIp}\`).then(res => res.json()).then(data => locTd.innerHTML = \`\${recordLabel} \${sourceLabel} | \${data.country || '未知'}\`).catch(() => locTd.innerHTML = \`\${recordLabel} \${sourceLabel} | 解析失败\`);
             }
             const start = performance.now();
@@ -2331,7 +2333,7 @@ const HTML_UI = `
                 if (data.success && data.result) {
                     const records = data.result.filter(r => r.type === 'A' || r.type === 'AAAA' || r.type === 'CNAME');
                     if (records.length === 0) container.innerHTML = '<span class="badge" style="background:rgba(245,158,11,0.1);color:var(--warning);">暂无解析记录</span>';
-                    else container.innerHTML = records.map(r => \`<span class="badge" style="background:rgba(99,102,241,0.08);color:var(--primary);border:1px solid rgba(99,102,241,0.15);">\${r.type} | \${r.content}</span>\`).join('');
+                    else container.innerHTML = records.map(r => \`<span class="badge" style="background:rgba(16,185,129,0.08);color:var(--primary);border:1px solid rgba(16,185,129,0.15);">\${r.type} | \${r.content}</span>\`).join('');
                 } else container.innerHTML = \`<span class="badge" style="background:rgba(239,68,68,0.08);color:var(--danger);">\${data.error || '获取失败'}</span>\`;
             } catch (e) { document.getElementById('dnsStatus').innerHTML = '<span class="badge" style="background:rgba(239,68,68,0.08);color:var(--danger);">网络异常</span>'; }
         }
@@ -2349,8 +2351,8 @@ const HTML_UI = `
             const resultDiv = document.getElementById('autoUpdateResult');
             btn.disabled = true; btn.textContent = '⏳ 智能调度中，请耐心等待...';
             resultDiv.style.display = 'block';
-            resultDiv.style.background = 'rgba(99,102,241,0.04)';
-            resultDiv.style.border = '1px solid rgba(99,102,241,0.15)';
+            resultDiv.style.background = 'rgba(16,185,129,0.04)';
+            resultDiv.style.border = '1px solid rgba(16,185,129,0.15)';
             resultDiv.style.color = 'var(--primary)';
             resultDiv.innerHTML = '🤖 正在拉取移动专属节点并执行多维度智能评分...<br>⏱️ 预计需要 15-30 秒';
             
@@ -2359,8 +2361,8 @@ const HTML_UI = `
                 const data = await res.json();
                 
                 if (data.success) {
-                    resultDiv.style.background = 'rgba(16,185,129,0.04)';
-                    resultDiv.style.border = '1px solid rgba(16,185,129,0.15)';
+                    resultDiv.style.background = 'rgba(34,197,94,0.04)';
+                    resultDiv.style.border = '1px solid rgba(34,197,94,0.15)';
                     resultDiv.style.color = 'var(--success)';
                     let html = '✅ ' + data.message + '<br><br>';
                     html += '<strong>🏆 TOP节点详情：</strong><br>';
@@ -2407,7 +2409,7 @@ const HTML_UI = `
                             html += \`<div style="background:var(--border);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;border-left:3px solid \${isSuccess ? 'var(--success)' : 'var(--danger)'};">\`;
                             html += \`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">\`;
                             html += \`<span style="font-size:12px;color:var(--text-sec);">\${h.created_at}</span>\`;
-                            html += \`<span class="badge" style="background:\${isSuccess ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)'};color:\${isSuccess ? 'var(--success)' : 'var(--danger)'};">\${h.trigger_type === 'auto' ? '🤖 自动' : '👤 手动'}</span>\`;
+                            html += \`<span class="badge" style="background:\${isSuccess ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'};color:\${isSuccess ? 'var(--success)' : 'var(--danger)'};">\${h.trigger_type === 'auto' ? '🤖 自动' : '👤 手动'}</span>\`;
                             html += \`</div>\`;
                             
                             if (isSuccess) {
@@ -2579,7 +2581,7 @@ const HTML_UI = `
         async function manualSubdomainUpdate(sub, btn) {
             if (btn) { btn.disabled = true; btn.textContent = '⏳ 调度中...'; }
             const resultDiv = document.getElementById('subdomainResult');
-            if (resultDiv) { resultDiv.style.display = 'block'; resultDiv.style.background = 'rgba(99,102,241,0.08)'; resultDiv.innerHTML = '🤖 正在按运营商拉取优选节点并推送 DNS（约 15-40 秒）...'; }
+            if (resultDiv) { resultDiv.style.display = 'block'; resultDiv.style.background = 'rgba(16,185,129,0.08)'; resultDiv.innerHTML = '🤖 正在按运营商拉取优选节点并推送 DNS（约 15-40 秒）...'; }
             try {
                 const res = await fetch('/api/subdomain-update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sub: sub || null }) });
                 const data = await res.json();
@@ -2590,7 +2592,7 @@ const HTML_UI = `
                             if (r.success) return '✅ ' + r.sub + '（' + r.ispType + '）→ ' + r.topNodes.map(function(n){ return n.ip; }).join('、');
                             return '❌ ' + r.sub + '（' + r.ispType + '）: ' + r.error;
                         });
-                        resultDiv.style.background = 'rgba(16,185,129,0.08)';
+                        resultDiv.style.background = 'rgba(34,197,94,0.08)';
                         resultDiv.innerHTML = linesArr.join('<br>');
                     } else {
                         resultDiv.style.background = 'rgba(239,68,68,0.08)';
@@ -4224,7 +4226,7 @@ export default {
 
         // 📱 PWA manifest（公开）
         if (url.pathname === '/manifest.webmanifest') {
-            const iconSvg = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#6366f1"/><text x="50" y="64" font-size="46" text-anchor="middle">🚀</text></svg>`);
+            const iconSvg = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#10b981"/><text x="50" y="64" font-size="46" text-anchor="middle">🚀</text></svg>`);
             const manifest = {
                 name: '智能反代系统',
                 short_name: '智能反代',
@@ -4233,7 +4235,7 @@ export default {
                 scope: '/',
                 display: 'standalone',
                 background_color: '#0f1115',
-                theme_color: '#6366f1',
+                theme_color: '#10b981',
                 icons: [{ src: 'data:image/svg+xml,' + iconSvg, sizes: 'any', type: 'image/svg+xml', purpose: 'any' }]
             };
             return new Response(JSON.stringify(manifest), { headers: { 'Content-Type': 'application/manifest+json', 'Cache-Control': 'public, max-age=3600' } });
@@ -4773,13 +4775,13 @@ self.addEventListener('fetch',e=>{
             const linkHtml = links.map(l => {
                 const ips = bestIps[l.sub] || [];
                 const ipText = ips.length ? ips.join('、') : '（尚未调度，去面板点「全部调度」）';
-                return `<div style="padding:12px 16px;margin:8px 0;border-radius:10px;border:1px solid var(--border);${l.isp===isp?'background:rgba(16,185,129,0.12);border-color:var(--success);':''}">
+                return `<div style="padding:12px 16px;margin:8px 0;border-radius:10px;border:1px solid var(--border);${l.isp===isp?'background:rgba(34,197,94,0.12);border-color:var(--success);':''}">
     <div style="font-weight:700;"><a href="https://${l.sub}.${subBase}/" style="color:var(--text);text-decoration:none;">${l.label}.${subBase}</a> ${l.isp===isp?'← 检测到您的网络':''}</div>
     <div style="font-size:12px;color:#9ca3af;margin-top:6px;">优选IP：<code>${ipText}</code> <button class="cp" data-copy="${ips.join(',')}">复制</button></div>
   </div>`;
             }).join('');
             const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>智能反代系统 · 线路选择</title>
-<style>body{font-family:system-ui,-apple-system,'PingFang SC',sans-serif;background:#0f1115;color:#e5e7eb;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;padding:20px;} .box{max-width:480px;width:100%;} h2{margin:0 0 6px;} .sub{color:#9ca3af;font-size:13px;margin-bottom:18px;} code{background:rgba(120,120,120,.15);padding:2px 6px;border-radius:6px;word-break:break-all;} .cp{margin-left:8px;background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;} .cp:hover{background:#374151;}</style>
+<style>body{font-family:system-ui,-apple-system,'PingFang SC',sans-serif;background:radial-gradient(800px 400px at 50% -10%,#0f3d2e,#0b1120);color:#e5e7eb;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;padding:20px;} .box{max-width:480px;width:100%;} h2{margin:0 0 6px;} .sub{color:#9ca3af;font-size:13px;margin-bottom:18px;} code{background:rgba(120,120,120,.15);padding:2px 6px;border-radius:6px;word-break:break-all;} .cp{margin-left:8px;background:#1a2433;color:#e5e7eb;border:1px solid #243140;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;} .cp:hover{background:#243140;}</style>
 ${targetSub?`<meta http-equiv="refresh" content="2;url=https://${targetSub}.${subBase}/">`:''}
 </head><body><div class="box">
 <h2>🌐 智能反代系统 · 线路选择</h2>
