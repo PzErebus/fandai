@@ -786,12 +786,12 @@ const HTML_UI = `
                 </div>
                 <div class="chart-row" style="margin-top:16px;">
                     <div class="chart-col chart-col-main">
-                        <div style="font-size:13px;color:var(--text-sec);margin-bottom:8px;font-weight:500;">🌍 访问者地理分布（近 7 天）</div>
-                        <div id="geoMap" style="height:280px;width:100%;border-radius:12px;border:1px solid var(--border);"></div>
+                        <div style="font-size:13px;color:var(--text-sec);margin-bottom:8px;font-weight:500;white-space:nowrap;">🌍 访问者地理分布</div>
+                        <div id="geoMap" style="height:320px;width:100%;border-radius:12px;border:1px solid var(--border);"></div>
                     </div>
-                    <div class="chart-col chart-col-side">
-                        <div style="font-size:13px;color:var(--text-sec);margin-bottom:8px;font-weight:500;">📉 节点延迟趋势（近 7 天）</div>
-                        <canvas id="pingHistoryChart"></canvas>
+                    <div class="chart-col chart-col-side" style="display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;min-height:340px;">
+                        <div style="font-size:13px;color:var(--text-sec);margin-bottom:8px;font-weight:500;white-space:nowrap;">📉 节点延迟趋势（近 7 天）</div>
+                        <canvas id="pingHistoryChart" style="flex:1;min-height:280px;width:100%;"></canvas>
                     </div>
                 </div>
                 <div class="modal-section-title">🕵️ 最新独立播放记录 <span class="modal-section-sub">(仅拦截 PlaybackInfo 真实播放)</span></div>
@@ -1547,7 +1547,15 @@ const HTML_UI = `
                         window.__pingHistoryChart = new Chart(phCtx, {
                             type: 'line',
                             data: { labels: days.map(d => d.substring(5)), datasets },
-                            options: { responsive: true, plugins: { title: { display: true, text: '各节点平均延迟 (ms)', font: {size: 14} } }, scales: { y: { beginAtZero: true } } }
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    title: { display: true, text: '各节点平均延迟 (ms)', font: {size: 13} },
+                                    legend: { position: 'bottom', labels: { boxWidth: 10, font: {size: 11}, padding: 8 } }
+                                },
+                                scales: { y: { beginAtZero: true, ticks: { font: {size: 10} } }, x: { ticks: { font: {size: 10} } } }
+                            }
                         });
                     } else if (phCanvas) {
                         phCanvas.parentNode.insertAdjacentHTML('beforeend', '<div style="font-size:12px;color:var(--text-sec);text-align:center;padding:20px;">暂无测速历史（在节点卡片点「测速」即可记录）</div>');
