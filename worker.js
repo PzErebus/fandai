@@ -1,4 +1,4 @@
-// VERSION: 1.0.9
+// VERSION: 1.2.1
 
 // ==========================================
 // 安全工具函数 (Security Utilities)
@@ -25,6 +25,56 @@ function isValidUrl(urlStr) {
     } catch(e) {
         return false;
     }
+}
+
+// ==========================================
+// 🌟 Cloudflare 优选域名库（借鉴 EMBY_CF 的 OPTIMIZED_DOMAINS）
+// 一份社区维护的 CF 优选域名清单，由 Worker 边缘/浏览器双端测速取最快。
+// 这些域名本身不是「IP 库」，而是作为优选入口；实际优选 IP 由测速得出。
+// ==========================================
+const OPTIMIZED_DOMAINS = [
+  { subdomain: 'proxy1', domain: 'cf.090227.xyz', name: 'CF优选-090227' },
+  { subdomain: 'proxy2', domain: 'cf.877774.xyz', name: 'CF优选-877774' },
+  { subdomain: 'proxy3', domain: 'cloudflare-dl.byoip.top', name: '鱼皮优选' },
+  { subdomain: 'proxy4', domain: 'saas.sin.fan', name: 'MIYU优选' },
+  { subdomain: 'proxy5', domain: 'bestcf.030101.xyz', name: 'Mingyu优选' },
+  { subdomain: 'proxy6', domain: 'cf.cloudflare.182682.xyz', name: 'WeTest优选' },
+  { subdomain: 'proxy7', domain: 'cf.tencentapp.cn', name: '腾讯泛域名' },
+  { subdomain: 'proxy8', domain: 'www.visa.cn', name: 'Visa官方' },
+  { subdomain: 'proxy9', domain: 'mfa.gov.ua', name: '乌克兰外交部' },
+  { subdomain: 'proxy10', domain: 'www.shopify.com', name: 'Shopify官方' },
+  { subdomain: 'proxy11', domain: 'store.ubi.com', name: '育碧商店' },
+  { subdomain: 'proxy12', domain: 'staticdelivery.nexusmods.com', name: 'NexusMods' },
+];
+
+// 客户端网段缓存 key：IPv4 取 /24，IPv6 取完整，未知回落 default
+function getClientCacheKey(ip) {
+    if (!ip || ip === 'Unknown') return 'default';
+    if (ip.includes(':')) return ip;
+    const parts = ip.split('.');
+    if (parts.length === 4) return parts.slice(0, 3).join('.');
+    return ip;
+}
+
+// 边缘节点对所有优选域名发 HEAD /cdn-cgi/trace 测速，按延迟排序返回
+async function speedtestOptimizedFromEdge() {
+    const tasks = OPTIMIZED_DOMAINS.map(async (d) => {
+        const host = d.subdomain + '.' + d.domain;
+        const start = Date.now();
+        try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 4000);
+            const r = await fetch(`https://${host}/cdn-cgi/trace`, { method: 'HEAD', signal: ctrl.signal });
+            clearTimeout(timer);
+            const ms = Date.now() - start;
+            return { host, name: d.name, ms: r.ok ? ms : 9999, ok: r.ok };
+        } catch (e) {
+            return { host, name: d.name, ms: 9999, ok: false };
+        }
+    });
+    const results = await Promise.all(tasks);
+    results.sort((a, b) => a.ms - b.ms);
+    return results;
 }
 
 // 路径验证：防止路径遍历攻击
@@ -236,6 +286,17 @@ const CSS_COMMON = `
     .node-stat-label { font-size: 11px; color: var(--text-sec); }
     .node-stat-value { font-size: 15px; font-weight: 700; }
 
+    .node-top-info { display: flex; flex-direction: column; gap: 6px; }
+    .node-top-info .info-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .node-top-info .info-label { color: var(--text-sec); font-size: 12px; }
+
+    .node-details { margin-top: 2px; }
+    .node-details summary { list-style: none; cursor: pointer; font-size: 13px; color: var(--primary); font-weight: 600; padding: 6px 0; user-select: none; display: flex; align-items: center; gap: 6px; }
+    .node-details summary::-webkit-details-marker { display: none; }
+    .node-details summary::before { content: '▸'; transition: transform 0.2s ease; color: var(--primary); }
+    .node-details[open] summary::before { transform: rotate(90deg); }
+    .node-details-body { display: flex; flex-direction: column; gap: 12px; padding-top: 10px; }
+
     .batch-bar { background: rgba(99,102,241,0.04); padding: 12px 16px; border-radius: 12px; border: 1px dashed rgba(99,102,241,0.2); margin-bottom: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     .batch-divider { width: 1px; height: 20px; background: var(--border-solid); }
 
@@ -311,6 +372,20 @@ const CSS_COMMON = `
     .tg-cmd-desc { font-size: 11px; color: var(--text-sec); }
     .tg-divider { height: 1px; background: var(--border); }
 
+    /* 设置分组折叠 */
+    .settings-group { background: var(--card); border: 1px solid var(--border); border-radius: 16px; margin-bottom: 16px; overflow: hidden; }
+    .settings-group > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 16px 22px; user-select: none; transition: background 0.2s; }
+    .settings-group > summary::-webkit-details-marker { display: none; }
+    .settings-group > summary .sg-icon { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, var(--primary), var(--primary-end)); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .settings-group > summary .sg-title { font-size: 17px; font-weight: 700; }
+    .settings-group > summary .sg-sub { font-size: 12px; color: var(--text-sec); font-weight: 400; }
+    .settings-group > summary .sg-chev { margin-left: auto; font-size: 14px; color: var(--text-sec); transition: transform 0.25s ease; }
+    .settings-group[open] > summary .sg-chev { transform: rotate(180deg); }
+    .settings-group > summary:hover { background: rgba(120,120,120,0.04); }
+    .settings-body { padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 0; }
+    .settings-body .card { margin-bottom: 14px; box-shadow: none; }
+    .settings-body .card:last-child { margin-bottom: 0; }
+
     @media (max-width: 768px) {
         :root { --nav-height: 56px; }
         .container { padding: 0 10px; padding-top: calc(var(--nav-height) + 10px); }
@@ -349,6 +424,8 @@ const CSS_COMMON = `
         .info-label { min-width: auto; }
         .card-footer { flex-direction: column; gap: 6px; }
         .card-footer .btn-edit, .card-footer .btn-del { width: 100%; text-align: center; justify-content: center; }
+        .node-details summary { font-size: 12px; }
+        .node-top-info .info-row { flex-direction: row; align-items: center; gap: 8px; }
 
         .table-wrapper { border: none; background: transparent; overflow: visible; }
         table, thead, tbody, th, td, tr { display: block; width: 100%; }
@@ -405,7 +482,7 @@ const LOGIN_UI = `
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>系统授权</title>
+    <title>智能反代系统 · 后台授权</title>
     <style>
         ${CSS_COMMON}
         body { display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; margin: 0; background: var(--bg); }
@@ -457,7 +534,7 @@ const LANDING_UI = `
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智能线路 · 访问地址</title>
+<title>智能反代系统 · 访问地址</title>
 <style>
 :root{
   --bg:#0f1115; --card:#171a21; --border:#262b36; --text:#e8eaed; --text-sec:#9aa3b2;
@@ -473,11 +550,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC
 .cards{display:flex;flex-direction:column;gap:14px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px 20px;display:flex;align-items:center;gap:16px;transition:.2s}
 .card.active{border-color:var(--primary);box-shadow:0 0 0 3px rgba(99,102,241,.18)}
-.icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
-.icon.tri{background:rgba(99,102,241,.15);color:#a5b4fc}
-.icon.dx{background:rgba(239,68,68,.15);color:#fca5a5}
-.icon.lt{background:rgba(59,130,246,.15);color:#93c5fd}
-.icon.yd{background:rgba(34,197,94,.15);color:#86efac}
+.icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+.icon svg{width:28px;height:28px;display:block}
+.icon.tri{background:rgba(99,102,241,.15);color:#a5b4fc;font-size:24px}
+.icon.dx{background:#E60012}
+.icon.lt{background:#E60012}
+.icon.yd{background:#0085D0}
 .info{flex:1;min-width:0}
 .carrier{font-size:15px;font-weight:600;margin-bottom:3px}
 .url{font-size:13px;color:var(--text-sec);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -509,7 +587,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC
 <div class="wrap">
   <div class="head">
     <div class="logo">🚀</div>
-    <h1>智能线路反代 · 访问地址</h1>
+    <h1>智能反代系统 · 访问地址</h1>
     <p>请根据你的运营商选择对应入口；不确定就直接用「三网通用」。<br>复制地址发给朋友，或点「打开」立即使用。</p>
   </div>
   <div class="cards">
@@ -519,17 +597,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC
       <div class="acts"><button class="btn copy" data-url="https://fandai.erebus.de5.net">复制</button><a class="btn primary" href="https://fandai.erebus.de5.net" target="_blank">打开</a></div>
     </div>
     <div class="card" data-host="dx.erebus.de5.net">
-      <div class="icon dx">📡</div>
+      <div class="icon dx"><svg viewBox="0 0 100 100" width="28" height="28" fill="none"><rect width="100" height="100" rx="20" fill="#E60012"/><path d="M50 18 L50 82 M28 32 L72 32 M28 68 L72 68" stroke="#fff" stroke-width="12" stroke-linecap="round"/><circle cx="50" cy="50" r="12" fill="#fff"/></svg></div>
       <div class="info"><div class="carrier">电信<span class="tag">DX</span></div><div class="url">https://dx.erebus.de5.net/</div></div>
       <div class="acts"><button class="btn copy" data-url="https://dx.erebus.de5.net/">复制</button><a class="btn primary" href="https://dx.erebus.de5.net/" target="_blank">打开</a></div>
     </div>
     <div class="card" data-host="lt.erebus.de5.net">
-      <div class="icon lt">🔗</div>
+      <div class="icon lt"><svg viewBox="0 0 100 100" width="28" height="28"><rect width="100" height="100" rx="20" fill="#E60012"/><path d="M50 15 L85 50 L50 85 L15 50 Z M50 30 L70 50 L50 70 L30 50 Z" fill="none" stroke="#fff" stroke-width="8" stroke-linejoin="round"/></svg></div>
       <div class="info"><div class="carrier">联通<span class="tag">LT</span></div><div class="url">https://lt.erebus.de5.net/</div></div>
       <div class="acts"><button class="btn copy" data-url="https://lt.erebus.de5.net/">复制</button><a class="btn primary" href="https://lt.erebus.de5.net/" target="_blank">打开</a></div>
     </div>
     <div class="card" data-host="yd.erebus.de5.net">
-      <div class="icon yd">📱</div>
+      <div class="icon yd"><svg viewBox="0 0 100 100" width="28" height="28"><rect width="100" height="100" rx="20" fill="#0085D0"/><rect x="24" y="24" width="22" height="22" rx="4" fill="#fff"/><rect x="54" y="24" width="22" height="22" rx="4" fill="#fff" opacity=".45"/><rect x="39" y="54" width="22" height="22" rx="4" fill="#fff"/></svg></div>
       <div class="info"><div class="carrier">移动<span class="tag">YD</span></div><div class="url">https://yd.erebus.de5.net/</div></div>
       <div class="acts"><button class="btn copy" data-url="https://yd.erebus.de5.net/">复制</button><a class="btn primary" href="https://yd.erebus.de5.net/" target="_blank">打开</a></div>
     </div>
@@ -581,7 +659,7 @@ const HTML_UI = `
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>智能反代系统V1.2.1</title>
+    <title>智能反代系统</title>
     <style>${CSS_COMMON}</style>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -592,7 +670,7 @@ const HTML_UI = `
     <nav class="top-nav">
         <div class="nav-left">
             <span class="nav-brand">智能反代系统</span>
-            <span class="nav-version">v1.2.0</span>
+            <span class="nav-version">v1.2.1</span>
             <div class="nav-trace">
                 <div class="nav-trace-item">
                     <span class="nav-trace-icon">📍</span>
@@ -654,78 +732,12 @@ const HTML_UI = `
             <div class="section-header" style="margin-bottom:0;">
                 <div>
                     <div class="section-title" style="color: var(--success);">✨ 发现新版本！</div>
-                    <p style="font-size: 13px; color: var(--text-sec); margin-top: 4px;" id="updateMsg">当前版本: v1.0.3 | 最新版本: v?.?.?</p>
+                    <p style="font-size: 13px; color: var(--text-sec); margin-top: 4px;" id="updateMsg">当前版本: v1.2.1 | 最新版本: v?.?.?</p>
                 </div>
                 <button class="btn-submit" onclick="doOnlineUpdate()" id="onlineUpdateBtn" style="background: linear-gradient(135deg, var(--success), #059669);">🚀 一键拉取并升级</button>
             </div>
         </div>
         <div class="content-wrap">
-            <div class="card">
-                <div class="section-header">
-                    <div class="section-title">⚡ 专属线路测速与动态 DNS 解析</div>
-                </div>
-                
-                <div class="info-panel" style="margin-bottom: 16px;">
-                    <div class="info-panel-label">📡 当前域名生效的 DNS 解析：</div>
-                    <div id="dnsStatus" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <span style="color:var(--text-sec); font-size: 13px;">加载中...</span>
-                    </div>
-                </div>
-
-                <div class="toolbar">
-                    <select id="ipType" class="form-input" style="font-weight: 600; color: var(--primary);">
-                        <option value="移动" selected>🟢 移动专属</option>
-                        <option value="all">🌐 综合混合源</option>
-                        <option value="电信">🔵 电信专属</option>
-                        <option value="联通">🟠 联通专属</option>
-                        <option value="多线">🟣 多线BGP</option>
-                        <option value="ipv6">🚀 IPv6节点</option>
-                        <option value="优选">🌟 顶尖优选库</option>
-                    </select>
-
-                    <button class="btn-submit" id="btnFetchRemote" onclick="fetchRemoteAndTest()">🌍 提取预设源并测速</button>
-                    <button class="btn-outline" onclick="batchTcpPing()">🌐 复制去 ITDog</button>
-                    <button class="btn-outline" onclick="clearTest()">🗑️ 清空列表</button>
-                </div>
-
-                <div class="info-panel" style="margin-bottom: 16px;">
-                    <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap;">
-                        <input type="text" id="customApiUrl" class="form-input" value="https://ip.v2too.top/api/nodes" placeholder="填入自定义 JSON 或 文本 API 链接" style="flex: 1; min-width: 200px;">
-                        <button class="btn-submit" id="btnFetchCustomApi" onclick="fetchCustomApiAndTest()" style="background: linear-gradient(135deg, #3b82f6, #6366f1);">🌐 拉取 API 并测速</button>
-                    </div>
-
-                    <textarea id="customIps" rows="2" class="form-input" placeholder="在此粘贴自定义 IPv4、IPv6 或 优选域名 (支持混杂文本，自动提取)" style="width: 100%; margin-bottom: 12px; font-family: 'SF Mono', monospace; resize: vertical;"></textarea>
-                    
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button class="btn-submit" id="btnTestCustom" onclick="testCustomIPs()" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">🧪 测试粘贴的节点</button>
-                        <button class="btn-submit" id="btnDirectCname" onclick="directSubmitCname()" style="background: linear-gradient(135deg, #a855f7, #7c3aed);">🔗 直推 CNAME (免测速)</button>
-                        <button class="btn-danger" id="btnTop3Dns" onclick="updateTop3ToDns()">🌟 更新 TOP3 至 DNS</button>
-                        <button class="btn-submit" id="btnSelectedDns" onclick="updateSelectedToDns()" style="background: linear-gradient(135deg, var(--success), #059669);">☑️ 提交选中节点至 DNS</button>
-                    </div>
-                </div>
-                
-                <div id="statusText" class="status-msg" style="margin-bottom: 16px;">
-                    💡 测速完成后，可勾选复选框自由组合，点击【提交选中节点至 DNS】自动分发。
-                </div>
-
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAll" class="ip-checkbox" onclick="toggleSelectAll()"></th>
-                                <th>专属节点 (点击复制)</th>
-                                <th>预估延迟</th>
-                                <th>连通状态</th>
-                                <th>记录类型/归属地</th>
-                                <th>单节点操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="testTableBody">
-                            <tr><td colspan="6" style="text-align:center;color:var(--text-sec);">暂无数据，请拉取节点或输入自定义 IP/域名 测试</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
             
 
             <div class="card alert-card" style="border-left-color: var(--success);">
@@ -810,6 +822,7 @@ const HTML_UI = `
                     </div>
                 </div>
             </div>
+
             <div class="card">
                 <div class="section-header">
                     <div class="section-title">已反代的媒体库</div>
@@ -901,6 +914,81 @@ const HTML_UI = `
                 </form>
             </div>
 
+        
+<details class="settings-group">
+            <summary>
+                <span class="sg-icon">⚙️</span>
+                <span class="sg-title">系统设置</span>
+                <span class="sg-sub">（专属线路测速 / 调度模式 / Telegram / 核心层更新）</span>
+                <span class="sg-chev">▾</span>
+            </summary>
+            <div class="settings-body">
+            <div class="card">
+                <div class="section-header">
+                    <div class="section-title">⚡ 专属线路测速与动态 DNS 解析</div>
+                </div>
+                
+                <div class="info-panel" style="margin-bottom: 16px;">
+                    <div class="info-panel-label">📡 当前域名生效的 DNS 解析：</div>
+                    <div id="dnsStatus" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <span style="color:var(--text-sec); font-size: 13px;">加载中...</span>
+                    </div>
+                </div>
+
+                <div class="toolbar">
+                    <select id="ipType" class="form-input" style="font-weight: 600; color: var(--primary);">
+                        <option value="移动" selected>🟢 移动专属</option>
+                        <option value="all">🌐 综合混合源</option>
+                        <option value="电信">🔵 电信专属</option>
+                        <option value="联通">🟠 联通专属</option>
+                        <option value="多线">🟣 多线BGP</option>
+                        <option value="ipv6">🚀 IPv6节点</option>
+                        <option value="优选">🌟 顶尖优选库</option>
+                    </select>
+
+                    <button class="btn-submit" id="btnFetchRemote" onclick="fetchRemoteAndTest()">🌍 提取预设源并测速</button>
+                    <button class="btn-outline" onclick="batchTcpPing()">🌐 复制去 ITDog</button>
+                    <button class="btn-outline" onclick="clearTest()">🗑️ 清空列表</button>
+                </div>
+
+                <div class="info-panel" style="margin-bottom: 16px;">
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" id="customApiUrl" class="form-input" value="https://ip.v2too.top/api/nodes" placeholder="填入自定义 JSON 或 文本 API 链接" style="flex: 1; min-width: 200px;">
+                        <button class="btn-submit" id="btnFetchCustomApi" onclick="fetchCustomApiAndTest()" style="background: linear-gradient(135deg, #3b82f6, #6366f1);">🌐 拉取 API 并测速</button>
+                    </div>
+
+                    <textarea id="customIps" rows="2" class="form-input" placeholder="在此粘贴自定义 IPv4、IPv6 或 优选域名 (支持混杂文本，自动提取)" style="width: 100%; margin-bottom: 12px; font-family: 'SF Mono', monospace; resize: vertical;"></textarea>
+                    
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn-submit" id="btnTestCustom" onclick="testCustomIPs()" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">🧪 测试粘贴的节点</button>
+                        <button class="btn-submit" id="btnDirectCname" onclick="directSubmitCname()" style="background: linear-gradient(135deg, #a855f7, #7c3aed);">🔗 直推 CNAME (免测速)</button>
+                        <button class="btn-danger" id="btnTop3Dns" onclick="updateTop3ToDns()">🌟 更新 TOP3 至 DNS</button>
+                        <button class="btn-submit" id="btnSelectedDns" onclick="updateSelectedToDns()" style="background: linear-gradient(135deg, var(--success), #059669);">☑️ 提交选中节点至 DNS</button>
+                    </div>
+                </div>
+                
+                <div id="statusText" class="status-msg" style="margin-bottom: 16px;">
+                    💡 测速完成后，可勾选复选框自由组合，点击【提交选中节点至 DNS】自动分发。
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAll" class="ip-checkbox" onclick="toggleSelectAll()"></th>
+                                <th>专属节点 (点击复制)</th>
+                                <th>预估延迟</th>
+                                <th>连通状态</th>
+                                <th>记录类型/归属地</th>
+                                <th>单节点操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="testTableBody">
+                            <tr><td colspan="6" style="text-align:center;color:var(--text-sec);">暂无数据，请拉取节点或输入自定义 IP/域名 测试</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
     <div class="card">
             <div class="section-header">
                 <div class="section-title">⚙️ Worker 调度模式与区域设置</div>
@@ -929,7 +1017,6 @@ const HTML_UI = `
             </div>
             <div id="place-status" style="margin-top: 10px; font-size: 13px; color: var(--text-sec); font-weight: 600;">后台全自动安全调度，不暴露任何私钥</div>
         </div>
-
         <div class="card tg-console">
             <div class="tg-console-header">
                 <div class="tg-console-icon">✈️</div>
@@ -998,7 +1085,6 @@ const HTML_UI = `
                 </div>
             </div>
         </div>
-
             <div class="card alert-card danger">
     <div class="section-header" style="margin-bottom:12px;">
         <div class="section-title" style="color: var(--danger);">🚀 一键覆盖/更新 Worker 核心层代码</div>
@@ -1011,8 +1097,17 @@ const HTML_UI = `
         <button class="btn-danger" id="deployBtn" onclick="deployWorker()" style="margin-left: auto;">🔥 立即覆盖部署并重启节点</button>
     </div>
 </div>
-            
-        </div>
+            <div class="card">
+                <div class="section-header">
+                    <div class="section-title">🌟 Cloudflare 优选域名测速</div>
+                    <button class="btn-submit" onclick="runDomainSpeedTest()" style="background: linear-gradient(135deg, var(--primary), var(--primary-end));">🚀 开始测速</button>
+                </div>
+                <div style="font-size:12px;color:var(--text-sec);margin-bottom:12px;">边缘节点对各优选域名发 HEAD /cdn-cgi/trace 测速，按客户端网段缓存 1 小时。复制最快域名可作反代目标前缀，从最快 Cloudflare 边缘回源。</div>
+                <div id="domainSpeedResult" style="display:flex;flex-direction:column;gap:8px;">点击「开始测速」获取各优选域名延迟…</div>
+            </div>
+            </div>
+        </details>
+</div>
         
         <div class="footer">
             <div class="footer-text">
@@ -1022,8 +1117,8 @@ const HTML_UI = `
     </div>
 
     <script>
-        const CURRENT_VERSION = '1.0.9';
-        const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/baiitang/Sakura/main/Fileball/Yuan/woker.js';
+        const CURRENT_VERSION = '1.2.1';
+        const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PzErebus/fandai/main/worker.js';
         const CF_DOMAIN = 'fandai.erebus.de5.net';
         
         const modeNames = { 'off': '保守', 'realip_only': '严格', 'dual': '兼容', 'strict': '强力' };
@@ -1518,6 +1613,35 @@ const HTML_UI = `
             proxyNodesForPing.forEach((node, offset) => { setTimeout(() => pingTarget(node.idx, node.url), offset * 200); });
         }
 
+        async function runDomainSpeedTest() {
+            const box = document.getElementById('domainSpeedResult');
+            if (!box) return;
+            box.innerHTML = '<div style="color:var(--text-sec);font-size:13px;">测速中...</div>';
+            try {
+                const res = await fetch('/api/domains/speed');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '测速失败');
+                const rows = (data.results || []).map(r => {
+                    const ms = (r.ms == null || r.ms >= 9999) ? '超时' : r.ms + 'ms';
+                    const color = (r.ms != null && r.ms < 100) ? 'var(--success)' : (r.ms != null && r.ms < 300) ? 'var(--warning)' : 'var(--danger)';
+                    const barW = Math.min(100, Math.round((r.ms || 9999) / 6)) + '%';
+                    return \`<div style="display:flex;align-items:center;gap:10px;font-size:13px;">
+                        <div style="width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="\${escapeHtml(r.host)}">\${escapeHtml(r.name)}</div>
+                        <div style="flex:1;height:8px;background:rgba(120,120,120,0.1);border-radius:4px;overflow:hidden;">
+                            <div style="width:\${barW};height:100%;background:\${color};border-radius:4px;"></div>
+                        </div>
+                        <div style="width:64px;text-align:right;font-family:'SF Mono',monospace;color:\${color};font-weight:600;">\${ms}</div>
+                        <button class="icon-btn" onclick="copyTxt('https://\${r.host}')" title="复制域名">📋</button>
+                    </div>\`;
+                }).join('');
+                const best = data.best ? \`<div style="margin-top:10px;font-size:13px;font-weight:700;color:var(--success);">🏆 最快：\${escapeHtml(data.best)}</div>\` : '';
+                const cached = data.cached ? '<span style="font-size:11px;color:var(--text-sec);">（网段缓存）</span>' : '';
+                box.innerHTML = (rows || '<div style="color:var(--text-sec);">无结果</div>') + best + cached;
+            } catch (e) {
+                box.innerHTML = '<div style="color:var(--danger);font-size:13px;">❌ ' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
         async function exportConfig() {
             try {
                 const res = await fetch('/api/routes'); const data = await res.json();
@@ -1598,7 +1722,21 @@ const HTML_UI = `
                                     <div style="font-size: 12px; color: var(--text-sec); margin-top:1px;">/\${r.prefix}</div>
                                 </div>
                             </div>
-                            <span class="badge" style="background: rgba(99,102,241,0.08); color: var(--primary);">\${modeNames[r.mode] || '未知'}</span>
+                        </div>
+
+                        <div class="node-top-info">
+                            <div class="info-row">
+                                <span class="info-label">节点延迟:</span>
+                                <span id="ping-\${idx}" class="ping-badge" onclick="pingTarget(\${idx}, '\${mainTarget}')" title="点击重新测速">测速中...</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">海报缓存:</span>
+                                <span style="color:\${r.cache_img !== 'off' ? 'var(--success)' : 'var(--warning)'}; font-weight:600; font-size: 12px;">\${r.cache_img !== 'off' ? '✅ 已开启' : '❌ 已关闭'}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">最后活跃:</span>
+                                <span style="color:var(--text-sec); font-size: 12px;">\${lastPlay}</span>
+                            </div>
                         </div>
 
                         <div class="node-stats">
@@ -1606,12 +1744,19 @@ const HTML_UI = `
                                 <span class="node-stat-label">⬇️ 今日流量</span>
                                 <span class="node-stat-value" style="color:var(--primary);">\${todayBw}</span>
                             </div>
-                            <div class="node-stat-item" style="text-align: right;">
+                            <div class="node-stat-item">
                                 <span class="node-stat-label">📺 播放 (今日/累计)</span>
                                 <span class="node-stat-value" style="color:var(--warning);">\${r.todayReqs} / \${totalReqs}</span>
                             </div>
+                            <div class="node-stat-item node-stat-mode">
+                                <span class="node-stat-label">模式</span>
+                                <span class="node-stat-value" style="color:var(--primary); font-size: 13px; padding: 3px 10px; border-radius: 999px; background: rgba(99,102,241,0.08); display: inline-block;">\${modeNames[r.mode] || '未知'}</span>
+                            </div>
                         </div>
 
+                        <details class="node-details">
+                            <summary>查看详情</summary>
+                            <div class="node-details-body">
                         <div style="display: flex; flex-direction: column; gap: 8px;">
                             <div class="info-row">
                                 <span class="info-label">直达链接:</span>
@@ -1628,24 +1773,13 @@ const HTML_UI = `
                                     <button class="icon-btn" onclick="toggleVis('t-\${idx}', true)" title="查看明文"><svg viewBox=\"0 0 24 24\" style=\"width:16px;height:16px;fill:currentColor\"><path d=\"M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z\"/></svg></button>
                                 </div>
                             </div>
-                            <div class="info-row">
-                                <span class="info-label">节点延迟:</span>
-                                <span id="ping-\${idx}" class="ping-badge" onclick="pingTarget(\${idx}, '\${mainTarget}')" title="点击重新测速">测速中...</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">海报缓存:</span>
-                                <span style="color:\${r.cache_img !== 'off' ? 'var(--success)' : 'var(--warning)'}; font-weight:600; font-size: 12px;">\${r.cache_img !== 'off' ? '✅ 已开启' : '❌ 已关闭'}</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">最后活跃:</span>
-                                <span style="color:var(--text-sec); font-size: 12px;">\${lastPlay}</span>
-                            </div>
-                        </div>
 
                         <div class="card-footer">
                             <button class="btn-edit" onclick="editNode('\${r.prefix}', '\${r.target}', '\${r.mode}', '\${r.remark || ''}', '\${r.icon || ''}', '\${r.cache_img}')">编辑配置</button>
                             <button class="btn-del" onclick="del('\${r.prefix}')">删除</button>
                         </div>
+                            </div>
+                        </details>
                     </div>\`;
 
                     setTimeout(() => pingTarget(idx, mainTarget), 500 * idx); 
@@ -3635,6 +3769,9 @@ export default {
                 // 多线子域名调度表
                 await ensureDnsTables(env);
                 
+                // 优选域名测速缓存（按客户端网段）
+                await env.DB.exec(`CREATE TABLE IF NOT EXISTS domain_speed_cache (cache_key TEXT PRIMARY KEY, results_json TEXT, ts INTEGER DEFAULT 0)`);
+                
                 return true;
             } catch(e) {
                 console.error("Database init error:", e.message);
@@ -3850,7 +3987,7 @@ export default {
         }
 
         const isPanelOrApi = url.pathname === '/admin' || url.pathname.startsWith('/api/');
-        const publicApi = url.pathname === '/api/tg-webhook' || url.pathname === '/api/health';
+        const publicApi = url.pathname === '/api/tg-webhook' || url.pathname === '/api/health' || url.pathname === '/api/domains/speed';
         if (isPanelOrApi && !publicApi) {
             const providedToken = getCookie(request, 'admin_token');
             if (providedToken !== EXPECTED_TOKEN) {
@@ -4330,11 +4467,11 @@ export default {
     <div style="font-size:12px;color:#9ca3af;margin-top:6px;">优选IP：<code>${ipText}</code> <button class="cp" data-copy="${ips.join(',')}">复制</button></div>
   </div>`;
             }).join('');
-            const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>智能线路选择</title>
+            const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>智能反代系统 · 线路选择</title>
 <style>body{font-family:system-ui,-apple-system,'PingFang SC',sans-serif;background:#0f1115;color:#e5e7eb;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;padding:20px;} .box{max-width:480px;width:100%;} h2{margin:0 0 6px;} .sub{color:#9ca3af;font-size:13px;margin-bottom:18px;} code{background:rgba(120,120,120,.15);padding:2px 6px;border-radius:6px;word-break:break-all;} .cp{margin-left:8px;background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;} .cp:hover{background:#374151;}</style>
 ${targetSub?`<meta http-equiv="refresh" content="2;url=https://${targetSub}.${subBase}/">`:''}
 </head><body><div class="box">
-<h2>🌐 智能线路选择</h2>
+<h2>🌐 智能反代系统 · 线路选择</h2>
 <div class="sub">检测到您的网络：<b>${ispCn}</b><br>2 秒后将自动跳转至最优线路；也可手动选择：</div>
 ${linkHtml}
 <div class="sub" style="margin-top:18px;">把播放器/客户端的地址设为对应子域名即可走该运营商优选 IP。<br>主域名 <code>${base}</code> 仍按面板「智能DNS自动调度」配置生效。<br><b>提速：</b>在客户端本地 hosts / 智能DNS 中将子域名覆盖为上方「优选IP」，可走该运营商最快 Cloudflare 边缘。</div>
@@ -4575,6 +4712,49 @@ ${linkHtml}
                 }
             }
             return new Response("Method not allowed", { status: 405 });
+        }
+
+        // ==========================================
+        // 🌟 优选域名测速接口（借鉴 EMBY_CF：边缘测速 + 按客户端网段缓存 1 小时）
+        // GET：优先读缓存，无缓存则边缘测速并写回；POST：接收浏览器端复测结果并缓存
+        // ==========================================
+        if (url.pathname === '/api/domains/speed') {
+            try {
+                const clientIp = request.headers.get('cf-connecting-ip') || request.headers.get('x-real-ip') || '0.0.0.0';
+                const cacheKey = getClientCacheKey(clientIp);
+
+                if (request.method === 'POST') {
+                    const body = await request.json().catch(() => ({}));
+                    if (body && Array.isArray(body.results) && body.results.length) {
+                        const sorted = body.results.slice().sort((a, b) => (a.ms == null ? 9999 : a.ms) - (b.ms == null ? 9999 : b.ms));
+                        try {
+                            await env.DB.prepare('INSERT OR REPLACE INTO domain_speed_cache (cache_key, results_json, ts) VALUES (?, ?, ?)')
+                                .bind(cacheKey, JSON.stringify(sorted), Date.now()).run();
+                        } catch (e) {}
+                        return Response.json({ success: true, best: sorted[0] && sorted[0].host ? sorted[0].host : null });
+                    }
+                    return Response.json({ success: false, error: '无效结果' });
+                }
+
+                // GET
+                let cached = null;
+                try {
+                    cached = await env.DB.prepare('SELECT results_json, ts FROM domain_speed_cache WHERE cache_key = ?').bind(cacheKey).first();
+                } catch (e) {}
+                const HOUR = 3600 * 1000;
+                if (cached && cached.ts && (Date.now() - cached.ts) < HOUR) {
+                    const results = JSON.parse(cached.results_json || '[]');
+                    return Response.json({ success: true, cached: true, results, best: results[0] && results[0].host ? results[0].host : null });
+                }
+                const results = await speedtestOptimizedFromEdge();
+                try {
+                    await env.DB.prepare('INSERT OR REPLACE INTO domain_speed_cache (cache_key, results_json, ts) VALUES (?, ?, ?)')
+                        .bind(cacheKey, JSON.stringify(results), Date.now()).run();
+                } catch (e) {}
+                return Response.json({ success: true, cached: false, results, best: results[0] && results[0].host ? results[0].host : null });
+            } catch (e) {
+                return Response.json({ success: false, error: e.message });
+            }
         }
 
         // ==========================================
