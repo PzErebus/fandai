@@ -1,4 +1,4 @@
-// VERSION: 1.2.3
+// VERSION: 1.2.4
 
 // ==========================================
 // 安全工具函数 (Security Utilities)
@@ -81,8 +81,32 @@ async function speedtestOptimizedFromEdge() {
 // 🔀 运行时故障转移（Failover）共享缓存与配置
 // ==========================================
 // 模块级缓存（同 isolate 内跨请求共享，冷启动重置；配合 D1 持久化跨 isolate 可见）
-const FD = globalThis.__fd || (globalThis.__fd = { health: new Map(), cfg: new Map(), cfgUntil: 0 });
+const FD = globalThis.__fd || (globalThis.__fd = { health: new Map(), cfg: new Map(), cfgUntil: 0, routeCache: new Map(), lastPlayTs: new Map(), pbCache: new Map() });
 const FO_DOWN_TTL = 60 * 1000; // 节点判定为「不可用」后的跳过时长（秒级切换）
+const ROUTE_CACHE_TTL = 60 * 1000;   // 路由内存缓存 TTL：命中时省去每请求一次的 D1 查询（省 20~80ms）
+const LAST_PLAY_GAP = 60 * 1000;     // last_play 节流：同节点 60s 内只写一次 D1，削减写放大
+const PB_CACHE_TTL = 3 * 1000;       // PlaybackInfo 微缓存：3s 内同 URL 直接回内存结果，削并发峰值
+
+// 读取路由（带 isolate 内存缓存；未命中回源 D1 并回填；404 负缓存 5s 防穿透）
+async function getCachedRoute(env, prefix) {
+    const now = Date.now();
+    const hit = FD.routeCache.get(prefix);
+    if (hit && now - hit.ts < (hit.route ? ROUTE_CACHE_TTL : 5000)) return hit.route;
+    let route = null;
+    try {
+        route = await env.DB.prepare(`SELECT target, mode, cache_img FROM routes WHERE prefix = ?`).bind(prefix).first();
+    } catch (e) { route = null; if (hit) return hit.route; } // D1 抖动时回退旧缓存
+    if (FD.routeCache.size > 500) FD.routeCache.clear();
+    FD.routeCache.set(prefix, { route, ts: now });
+    return route;
+}
+// 后台改动节点后清空路由缓存（全清最简单，冷启动后按需回填）
+function invalidateRouteCache() { FD.routeCache.clear(); }
+// 记录 PlaybackInfo 微缓存（超过容量上限时淘汰最旧条目）
+function putPbCache(key, entry) {
+    if (FD.pbCache.size > 200) { const first = FD.pbCache.keys().next().value; FD.pbCache.delete(first); }
+    FD.pbCache.set(key, entry);
+}
 
 // 读取系统配置（30s 内存缓存，避免每请求打 D1；未命中的 key 不缓存，保证写入后立即可读）
 async function getCfg(env, key, defVal) {
@@ -870,7 +894,7 @@ const HTML_UI = `
     <nav class="top-nav">
         <div class="nav-left">
             <span class="nav-brand">智能反代系统</span>
-            <span class="nav-version">v1.2.3</span>
+            <span class="nav-version">v1.2.4</span>
             <div class="nav-trace">
                 <div class="nav-trace-item">
                     <span class="nav-trace-icon">📍</span>
@@ -943,7 +967,7 @@ const HTML_UI = `
             <div class="section-header" style="margin-bottom:0;">
                 <div>
                     <div class="section-title" style="color: var(--success);">✨ 发现新版本！</div>
-                    <p style="font-size: 13px; color: var(--text-sec); margin-top: 4px;" id="updateMsg">当前版本: v1.2.3 | 最新版本: v?.?.?</p>
+                    <p style="font-size: 13px; color: var(--text-sec); margin-top: 4px;" id="updateMsg">当前版本: v1.2.4 | 最新版本: v?.?.?</p>
                 </div>
                 <button class="btn-submit" onclick="doOnlineUpdate()" id="onlineUpdateBtn" style="background: linear-gradient(135deg, var(--success), #059669);">🚀 一键拉取并升级</button>
             </div>
@@ -1362,7 +1386,7 @@ const HTML_UI = `
     </div>
 
     <script>
-        const CURRENT_VERSION = '1.2.3';
+        const CURRENT_VERSION = '1.2.4';
         const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PzErebus/fandai/main/worker.js';
         const CF_DOMAIN = 'fandai.erebus.de5.net';
         
@@ -5105,9 +5129,10 @@ ${linkHtml}
         if (url.pathname === '/api/routes/reorder' && request.method === 'POST') {
             if (!env.DB) return Response.json({ success: false, error: "未绑定 DB" });
             try {
-                const items = await request.json(); 
+                const items = await request.json();
                 const stmts = items.map(item => env.DB.prepare('UPDATE routes SET sort_order = ? WHERE prefix = ?').bind(item.sort_order, item.prefix));
                 await env.DB.batch(stmts);
+                invalidateRouteCache();
                 return Response.json({ success: true });
             } catch (e) { return Response.json({ success: false, error: e.message }); }
         }
@@ -5287,6 +5312,7 @@ ${linkHtml}
                     
                     await env.DB.prepare('INSERT OR REPLACE INTO routes (prefix, target, mode, remark, icon, cache_img, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)')
                         .bind(prefix, targetStr, mode, remark, icon, cacheImg, currentSortOrder).run();
+                    invalidateRouteCache();
                     return Response.json({ success: true });
                 } catch (e) {
                     console.error('Error in /api/routes POST:', e);
@@ -5307,6 +5333,7 @@ ${linkHtml}
                         }, { status: 400 });
                     }
                     await env.DB.prepare('DELETE FROM routes WHERE prefix = ?').bind(prefix).run();
+                    invalidateRouteCache();
                     return Response.json({ success: true });
                 } catch (e) {
                     console.error('Error in /api/routes DELETE:', e);
@@ -5385,8 +5412,8 @@ ${linkHtml}
 
             try {
                 if (!env.DB) return new Response(`404: Node not found (DB not bound)`, { status: 404 });
-                const stmt = env.DB.prepare(`SELECT target, mode, cache_img FROM routes WHERE prefix = ?`);
-                const route = await stmt.bind(prefix).first();
+                // 🚀 路由内存缓存：命中时省去 D1 查询往返
+                const route = await getCachedRoute(env, prefix);
                 if (!route) return new Response(`404: Node not found`, { status: 404 });
 
                 currentMode = route.mode || 'off'; enableCache = (route.cache_img !== 'off');
@@ -5407,10 +5434,16 @@ ${linkHtml}
         const isDashboardRequest = url.pathname === '/' || url.pathname === '/web/index.html';
 
         // 更新最后活跃时间：只要有任何请求就更新（包括访问首页、播放请求等）
+        // 🚀 60s 节流：同节点一分钟内只写一次 D1，避免每个分片请求都触发写放大
         if (matchedPrefix && env.DB && ctx && ctx.waitUntil) {
             try {
-                const nowTime = new Date(Date.now() + 8 * 3600000).toISOString().replace('T', ' ').split('.')[0];
-                ctx.waitUntil(env.DB.prepare(`UPDATE routes SET last_play = ? WHERE prefix = ?`).bind(nowTime, matchedPrefix).run());
+                const nowMs = Date.now();
+                if (nowMs - (FD.lastPlayTs.get(matchedPrefix) || 0) > LAST_PLAY_GAP) {
+                    FD.lastPlayTs.set(matchedPrefix, nowMs);
+                    if (FD.lastPlayTs.size > 500) FD.lastPlayTs.clear();
+                    const nowTime = new Date(nowMs + 8 * 3600000).toISOString().replace('T', ' ').split('.')[0];
+                    ctx.waitUntil(env.DB.prepare(`UPDATE routes SET last_play = ? WHERE prefix = ?`).bind(nowTime, matchedPrefix).run());
+                }
             } catch(e) {}
         }
 
@@ -5449,8 +5482,18 @@ ${linkHtml}
         let finalResponse = null; let lastError = null;
         const foEnabled = (env.DB) ? (await getCfg(env, 'failover_enabled', 'on') === 'on') : true;
 
+        // 🚀 PlaybackInfo 微缓存命中：3s 内同 URL 直接回内存结果，跳过上游请求（削并发峰值，如全家同时开播）
+        const isPbRequest = request.method === 'GET' && /playbackinfo/i.test(url.pathname);
+        const pbKey = isPbRequest ? (matchedPrefix || 'direct') + remainingPath + url.search : null;
+        if (isPbRequest) {
+            const pbHit = FD.pbCache.get(pbKey);
+            if (pbHit && Date.now() - pbHit.ts < PB_CACHE_TTL) {
+                finalResponse = new Response(pbHit.body, { status: pbHit.status, statusText: pbHit.statusText, headers: new Headers(pbHit.headers) });
+            }
+        }
+
         // 尝试所有节点（含运行时故障转移）
-        for (let i = 0; i < targetUrls.length; i++) {
+        if (!finalResponse) for (let i = 0; i < targetUrls.length; i++) {
             const targetUrlStr = targetUrls[i] + remainingPath + url.search; const targetUrl = new URL(targetUrlStr);
 
             // 🔀 运行时故障转移：已知近期不可用的节点直接跳过（除非是最后一个兜底）
@@ -5494,7 +5537,13 @@ ${linkHtml}
             }
 
             try {
-                const modifiedRequest = new Request(targetUrl, fetchInit); const response = await fetch(modifiedRequest);
+                // 🚀 首包超时 12s：死节点/假死节点快速失败，立即切换下个节点；收到响应头即清除计时器，不影响后续流式传输
+                const upstreamCtl = new AbortController();
+                const upstreamTimer = setTimeout(() => upstreamCtl.abort(), 12000);
+                let response;
+                try {
+                    response = await fetch(new Request(targetUrl, fetchInit), { signal: upstreamCtl.signal });
+                } finally { clearTimeout(upstreamTimer); }
                 // 5xx（含 502/503/504/520-524 等 Cloudflare 错误码）视为节点故障，触发故障转移
                 if (response.status >= 500) {
                     lastError = new Error(`节点 ${i+1} 返回 HTTP ${response.status}`);
@@ -5543,8 +5592,14 @@ ${linkHtml}
 
         if (finalResponse.status === 200 && responseHeaders.get("content-type")?.includes("json") && url.pathname.toLowerCase().includes("playbackinfo")) {
             try {
-                let clonedRes = finalResponse.clone(); 
-                let data = await clonedRes.json(); 
+                let clonedRes = finalResponse.clone();
+                const pbRawText = await clonedRes.text();
+                let data = JSON.parse(pbRawText);
+                // 🚀 写入 PlaybackInfo 微缓存（存原始未重写文本，命中后仍走统一重写路径）
+                if (isPbRequest && pbKey) {
+                    const pbHeaders = [...responseHeaders.entries()].filter(([k]) => !/^(content-encoding|content-length|transfer-encoding|set-cookie)$/i.test(k));
+                    putPbCache(pbKey, { status: finalResponse.status, statusText: finalResponse.statusText, headers: pbHeaders, body: pbRawText, ts: Date.now() });
+                }
                 let modified = false;
                 if (data && data.MediaSources) {
                     data.MediaSources.forEach(source => {
